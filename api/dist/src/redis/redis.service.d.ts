@@ -1,4 +1,5 @@
 import { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import Redis from 'ioredis';
 export declare class RedisService implements OnModuleInit, OnModuleDestroy {
     private readonly client;
     constructor();
@@ -11,4 +12,5 @@ export declare class RedisService implements OnModuleInit, OnModuleDestroy {
     ttl(key: string): Promise<number>;
     publish(channel: string, message: unknown): Promise<number>;
     subscribeOnce<T>(channel: string, timeoutMs: number): Promise<T | null>;
+    getClient(): Redis;
 }

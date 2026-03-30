@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MarketDataController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
+const api_response_util_1 = require("../common/utils/api-response.util");
 const market_data_service_1 = require("./market-data.service");
 let MarketDataController = class MarketDataController {
     marketDataService;
@@ -22,7 +23,8 @@ let MarketDataController = class MarketDataController {
         this.marketDataService = marketDataService;
     }
     async getTicker(symbol) {
-        return this.marketDataService.getTicker(symbol);
+        const ticker = await this.marketDataService.getTicker(symbol);
+        return (0, api_response_util_1.successResponse)(ticker, 'Ticker retrieved successfully');
     }
 };
 exports.MarketDataController = MarketDataController;

@@ -10,6 +10,8 @@ import {
   BinanceUnavailableException,
 } from '../binance/binance.service';
 import { CacheService } from '../cache/cache.service';
+import { MARKET_EVENTS_PUBLISHER } from '../events/events.tokens';
+import type { MarketEventsPublisher } from '../events/events.tokens';
 import { TickerDto } from './dto/ticker.dto';
 
 const HOT_CACHE_TTL_SECONDS = 10;
@@ -17,9 +19,29 @@ const STALE_CACHE_TTL_SECONDS = 120;
 const LOCK_TTL_SECONDS = 5;
 const WAITER_TIMEOUT_MS = 6000;
 
-type TickerBroadcastGateway = {
-  broadcastTicker?(room: string, ticker: TickerDto): Promise<void> | void;
+type DashboardTickerDto = {
+  symbol: string;
+  price: string;
+  volume24h: string | null;
+  priceChange24h: string | null;
+  high24h: string | null;
+  low24h: string | null;
+  fetchedAt: string;
 };
+
+/**
+ * The default symbol list used for the dashboard tracked-symbols panel.
+ * Only symbols that have been fetched at least once (and therefore have a
+ * hot or stale cache entry) will appear in the result. The list is ordered
+ * by the priority we want to display them in.
+ */
+const DEFAULT_MOVER_SYMBOLS = [
+  'BTCUSDT',
+  'ETHUSDT',
+  'SOLUSDT',
+  'BNBUSDT',
+  'XRPUSDT',
+];
 
 @Injectable()
 export class MarketDataService {
@@ -29,9 +51,53 @@ export class MarketDataService {
     private readonly binanceService: BinanceService,
     private readonly cacheService: CacheService,
     @Optional()
-    @Inject('MARKET_TICKER_GATEWAY')
-    private readonly tickerGateway?: TickerBroadcastGateway,
+    @Inject(MARKET_EVENTS_PUBLISHER)
+    private readonly marketEventsPublisher?: MarketEventsPublisher,
   ) {}
+
+  async getTrackedTickers(limit: number): Promise<DashboardTickerDto[]> {
+    const safeLimit =
+      Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 5;
+
+    const symbols = DEFAULT_MOVER_SYMBOLS.slice(0, safeLimit);
+
+    const results = await Promise.allSettled(
+      symbols.map(async (symbol): Promise<DashboardTickerDto | null> => {
+        // Prefer the hot cache; fall back to stale so the dashboard still
+        // shows data during periods when Binance is unreachable.
+        const hot = await this.cacheService.get<TickerDto>(
+          this.getHotCacheKey(symbol),
+        );
+        if (hot) return this.toDashboardTickerDto(hot);
+
+        const stale = await this.cacheService.get<TickerDto>(
+          this.getStaleCacheKey(symbol),
+        );
+        if (stale) return this.toDashboardTickerDto(stale);
+
+        return null;
+      }),
+    );
+
+    return results
+      .filter(
+        (r): r is PromiseFulfilledResult<DashboardTickerDto> =>
+          r.status === 'fulfilled' && r.value !== null,
+      )
+      .map((r) => r.value);
+  }
+
+  private toDashboardTickerDto(ticker: TickerDto): DashboardTickerDto {
+    return {
+      symbol: ticker.symbol,
+      price: ticker.price,
+      volume24h: ticker.volume24h ?? null,
+      priceChange24h: ticker.priceChange24h ?? null,
+      high24h: ticker.high24h ?? null,
+      low24h: ticker.low24h ?? null,
+      fetchedAt: ticker.fetchedAt,
+    };
+  }
 
   async getTicker(symbol: string): Promise<TickerDto> {
     const normalizedSymbol = this.normalizeSymbol(symbol);
@@ -60,7 +126,7 @@ export class MarketDataService {
     }
 
     this.logger.log(`Ticker waiter subscribed for ${normalizedSymbol}`);
-    return this.waitForFetcherOrFallback(normalizedSymbol);
+    return this.waitForFetcherOrFallback(normalizedSymbol, hotCacheKey);
   }
 
   private async fetchAndCacheTicker(
@@ -88,8 +154,18 @@ export class MarketDataService {
     return this.withCacheSource(ticker, 'fresh');
   }
 
-  private async waitForFetcherOrFallback(symbol: string): Promise<TickerDto> {
+  private async waitForFetcherOrFallback(
+    symbol: string,
+    hotCacheKey: string,
+  ): Promise<TickerDto> {
     const channel = this.getChannelKey(symbol);
+
+    const hotTicker = await this.cacheService.get<TickerDto>(hotCacheKey);
+    if (hotTicker) {
+      this.logger.log(`Ticker hot cache won race for ${symbol}`);
+      await this.backfillStaleCacheIfMissing(symbol, hotTicker);
+      return this.withCacheSource(hotTicker, 'hot');
+    }
 
     try {
       const publishedTicker = await this.cacheService.subscribeOnce<TickerDto>(
@@ -105,6 +181,13 @@ export class MarketDataService {
         `Pub/sub wait failed for ${symbol}, falling back to stale cache`,
         error instanceof Error ? error.stack : undefined,
       );
+    }
+
+    const cachedTicker = await this.cacheService.get<TickerDto>(hotCacheKey);
+    if (cachedTicker) {
+      this.logger.log(`Ticker hot cache filled while waiting for ${symbol}`);
+      await this.backfillStaleCacheIfMissing(symbol, cachedTicker);
+      return this.withCacheSource(cachedTicker, 'hot');
     }
 
     return this.getStaleTickerOrThrow(symbol);
@@ -147,12 +230,15 @@ export class MarketDataService {
     symbol: string,
     ticker: TickerDto,
   ): Promise<void> {
-    if (!this.tickerGateway?.broadcastTicker) {
+    if (!this.marketEventsPublisher?.publishTicker) {
       return;
     }
 
     try {
-      await this.tickerGateway.broadcastTicker(`ticker:${symbol}`, ticker);
+      await this.marketEventsPublisher.publishTicker(
+        `ticker:${symbol}`,
+        ticker as unknown as Record<string, unknown>,
+      );
     } catch (error) {
       this.logger.warn(
         `Ticker websocket broadcast failed for ${symbol}`,
@@ -249,7 +335,7 @@ export class MarketDataService {
   }
 
   private getHotCacheKey(symbol: string): string {
-    return `app:ticker:${symbol}`;
+    return `app:ticker:${symbol}:hot`;
   }
 
   private getStaleCacheKey(symbol: string): string {

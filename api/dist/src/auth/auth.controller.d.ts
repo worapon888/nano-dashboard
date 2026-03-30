@@ -6,24 +6,39 @@ export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
     register(registerDto: RegisterDto): Promise<{
-        id: string;
-        email: string;
-        displayName: string;
-        role: import("@prisma/client").$Enums.UserRole;
-        isActive: boolean;
-        createdAt: Date;
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: {
+            id: string;
+            email: string;
+            displayName: string;
+            role: import("@prisma/client").$Enums.UserRole;
+            isActive: boolean;
+            createdAt: Date;
+        };
     }>;
     login(loginDto: LoginDto): Promise<{
-        accessToken: string;
-        tokenType: string;
-        expiresIn: string;
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: {
+            accessToken: string;
+            tokenType: string;
+            expiresIn: string;
+        };
     }>;
     me(currentUser: CurrentUserPayload): Promise<{
-        id: string;
-        email: string;
-        displayName: string;
-        role: import("@prisma/client").$Enums.UserRole;
-        isActive: boolean;
-        createdAt: Date;
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: {
+            id: string;
+            email: string;
+            displayName: string;
+            role: import("@prisma/client").$Enums.UserRole;
+            isActive: boolean;
+            createdAt: Date;
+        };
     }>;
 }

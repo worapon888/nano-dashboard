@@ -1,3 +1,4 @@
+import type { UserEventsPublisher } from '../events/events.tokens';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
@@ -6,7 +7,9 @@ import { UserResponseDto } from './dto/user-response.dto';
 export declare class UsersService {
     private readonly prisma;
     private readonly redisService;
-    constructor(prisma: PrismaService, redisService: RedisService);
+    private readonly userEventsPublisher?;
+    private readonly logger;
+    constructor(prisma: PrismaService, redisService: RedisService, userEventsPublisher?: UserEventsPublisher | undefined);
     findAll(query: GetUsersQueryDto): Promise<{
         items: UserResponseDto[];
         meta: {
@@ -30,9 +33,7 @@ export declare class UsersService {
     } | null>;
     getMe(userId: string): Promise<UserResponseDto>;
     updateById(id: string, updateUserDto: UpdateUserDto): Promise<UserResponseDto>;
-    softDeleteById(id: string): Promise<{
-        success: boolean;
-    }>;
+    softDeleteById(id: string): Promise<void>;
     getActiveCount(): Promise<number>;
     private ensureUserExists;
     private buildUserWhereInput;

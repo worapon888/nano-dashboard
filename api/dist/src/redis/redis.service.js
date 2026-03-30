@@ -135,6 +135,9 @@ let RedisService = class RedisService {
             throw error;
         }
     }
+    getClient() {
+        return this.client;
+    }
 };
 exports.RedisService = RedisService;
 exports.RedisService = RedisService = __decorate([

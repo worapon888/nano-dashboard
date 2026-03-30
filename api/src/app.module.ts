@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { BinanceModule } from './binance/binance.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { EventsModule } from './events/events.module';
 import { MarketDataModule } from './market-data/market-data.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
@@ -13,6 +14,9 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     RedisModule,
+    // EventsModule is @Global — importing it here makes its publisher tokens available
+    // to every other module without explicit re-imports.
+    EventsModule,
     UsersModule,
     AuthModule,
     BinanceModule,

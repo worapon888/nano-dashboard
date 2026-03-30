@@ -1,15 +1,24 @@
 import { BinanceService } from '../binance/binance.service';
 import { CacheService } from '../cache/cache.service';
+import type { MarketEventsPublisher } from '../events/events.tokens';
 import { TickerDto } from './dto/ticker.dto';
-type TickerBroadcastGateway = {
-    broadcastTicker?(room: string, ticker: TickerDto): Promise<void> | void;
+type DashboardTickerDto = {
+    symbol: string;
+    price: string;
+    volume24h: string | null;
+    priceChange24h: string | null;
+    high24h: string | null;
+    low24h: string | null;
+    fetchedAt: string;
 };
 export declare class MarketDataService {
     private readonly binanceService;
     private readonly cacheService;
-    private readonly tickerGateway?;
+    private readonly marketEventsPublisher?;
     private readonly logger;
-    constructor(binanceService: BinanceService, cacheService: CacheService, tickerGateway?: TickerBroadcastGateway | undefined);
+    constructor(binanceService: BinanceService, cacheService: CacheService, marketEventsPublisher?: MarketEventsPublisher | undefined);
+    getTrackedTickers(limit: number): Promise<DashboardTickerDto[]>;
+    private toDashboardTickerDto;
     getTicker(symbol: string): Promise<TickerDto>;
     private fetchAndCacheTicker;
     private waitForFetcherOrFallback;

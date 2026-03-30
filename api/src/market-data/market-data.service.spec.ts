@@ -43,7 +43,10 @@ describe('MarketDataService', () => {
   it('returns immediately from hot cache', async () => {
     cacheService.get.mockResolvedValueOnce(ticker);
 
-    await expect(service.getTicker('btcusdt')).resolves.toEqual(ticker);
+    await expect(service.getTicker('btcusdt')).resolves.toMatchObject({
+      ...ticker,
+      cacheSource: 'hot',
+    });
     expect(binanceService.getTicker).not.toHaveBeenCalled();
   });
 
@@ -55,14 +58,17 @@ describe('MarketDataService', () => {
     cacheService.del.mockResolvedValue();
     cacheService.publish.mockResolvedValue();
 
-    await expect(service.getTicker('btcusdt')).resolves.toEqual(ticker);
+    await expect(service.getTicker('btcusdt')).resolves.toMatchObject({
+      ...ticker,
+      cacheSource: 'fresh',
+    });
 
     expect(binanceService.getTicker).toHaveBeenCalledWith('BTCUSDT');
     expect(cacheService.set).toHaveBeenNthCalledWith(
       1,
-      'app:ticker:BTCUSDT',
+      'app:ticker:BTCUSDT:hot',
       ticker,
-      2,
+      10,
     );
     expect(cacheService.set).toHaveBeenNthCalledWith(
       2,
@@ -86,8 +92,9 @@ describe('MarketDataService', () => {
     );
     cacheService.del.mockResolvedValue();
 
-    await expect(service.getTicker('BTCUSDT')).resolves.toEqual({
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
       ...ticker,
+      cacheSource: 'stale',
       stale: true,
     });
   });
@@ -97,7 +104,10 @@ describe('MarketDataService', () => {
     cacheService.setNx.mockResolvedValueOnce(false);
     cacheService.subscribeOnce.mockResolvedValueOnce(ticker);
 
-    await expect(service.getTicker('BTCUSDT')).resolves.toEqual(ticker);
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
+      ...ticker,
+      cacheSource: 'fresh',
+    });
     expect(binanceService.getTicker).not.toHaveBeenCalled();
     expect(cacheService.subscribeOnce).toHaveBeenCalledWith(
       'app:ch:ticker:BTCUSDT',
@@ -105,15 +115,45 @@ describe('MarketDataService', () => {
     );
   });
 
+  it('re-checks hot cache before subscribing when lock is already held', async () => {
+    cacheService.get.mockResolvedValueOnce(null).mockResolvedValueOnce(ticker);
+    cacheService.setNx.mockResolvedValueOnce(false);
+
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
+      ...ticker,
+      cacheSource: 'hot',
+    });
+
+    expect(cacheService.subscribeOnce).not.toHaveBeenCalled();
+    expect(binanceService.getTicker).not.toHaveBeenCalled();
+  });
+
+  it('re-checks hot cache after a missed publish before falling back to stale', async () => {
+    cacheService.get
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(ticker);
+    cacheService.setNx.mockResolvedValueOnce(false);
+    cacheService.subscribeOnce.mockResolvedValueOnce(null);
+
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
+      ...ticker,
+      cacheSource: 'hot',
+    });
+  });
+
   it('falls back to stale cache when waiter times out', async () => {
     cacheService.get
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ ...ticker, stale: false });
     cacheService.setNx.mockResolvedValueOnce(false);
     cacheService.subscribeOnce.mockResolvedValueOnce(null);
 
-    await expect(service.getTicker('BTCUSDT')).resolves.toEqual({
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
       ...ticker,
+      cacheSource: 'stale',
       stale: true,
     });
   });

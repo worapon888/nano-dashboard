@@ -19,19 +19,23 @@ const current_user_decorator_1 = require("./decorators/current-user.decorator");
 const login_dto_1 = require("./dto/login.dto");
 const register_dto_1 = require("./dto/register.dto");
 const jwt_auth_guard_1 = require("./guards/jwt-auth.guard");
+const api_response_util_1 = require("../common/utils/api-response.util");
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
         this.authService = authService;
     }
     async register(registerDto) {
-        return this.authService.register(registerDto);
+        const user = await this.authService.register(registerDto);
+        return (0, api_response_util_1.successResponse)(user, 'User registered successfully');
     }
     async login(loginDto) {
-        return this.authService.login(loginDto);
+        const authResult = await this.authService.login(loginDto);
+        return (0, api_response_util_1.successResponse)(authResult, 'Login successful');
     }
     async me(currentUser) {
-        return this.authService.me(currentUser.sub);
+        const user = await this.authService.me(currentUser.sub);
+        return (0, api_response_util_1.successResponse)(user, 'Authenticated user retrieved successfully');
     }
 };
 exports.AuthController = AuthController;
@@ -44,6 +48,7 @@ __decorate([
 ], AuthController.prototype, "register", null);
 __decorate([
     (0, common_1.Post)('login'),
+    (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [login_dto_1.LoginDto]),

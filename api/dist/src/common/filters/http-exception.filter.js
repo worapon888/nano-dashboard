@@ -21,9 +21,7 @@ let HttpExceptionFilter = class HttpExceptionFilter {
             exceptionResponse !== null &&
             'message' in exceptionResponse
             ? exceptionResponse.message
-            : exception instanceof Error
-                ? exception.message
-                : 'Internal server error';
+            : 'Internal server error';
         response.status(statusCode).send({
             success: false,
             statusCode,

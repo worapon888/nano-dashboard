@@ -6,18 +6,33 @@ export declare class UsersController {
     private readonly usersService;
     constructor(usersService: UsersService);
     findAll(query: GetUsersQueryDto): Promise<{
-        items: import("./dto/user-response.dto").UserResponseDto[];
-        meta: {
-            page: number;
-            limit: number;
-            total: number;
-            totalPages: number;
-        };
-    }>;
-    getMe(currentUser: CurrentUserPayload): Promise<import("./dto/user-response.dto").UserResponseDto>;
-    findById(id: string): Promise<import("./dto/user-response.dto").UserResponseDto>;
-    updateById(id: string, updateUserDto: UpdateUserDto): Promise<import("./dto/user-response.dto").UserResponseDto>;
-    softDeleteById(id: string): Promise<{
+        meta?: Record<string, any> | undefined;
         success: boolean;
+        message: string;
+        data: import("./dto/user-response.dto").UserResponseDto[];
+    }>;
+    getMe(currentUser: CurrentUserPayload): Promise<{
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: import("./dto/user-response.dto").UserResponseDto;
+    }>;
+    findById(id: string): Promise<{
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: import("./dto/user-response.dto").UserResponseDto;
+    }>;
+    updateById(id: string, updateUserDto: UpdateUserDto): Promise<{
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: import("./dto/user-response.dto").UserResponseDto;
+    }>;
+    softDeleteById(id: string): Promise<{
+        meta?: Record<string, any> | undefined;
+        success: boolean;
+        message: string;
+        data: null;
     }>;
 }

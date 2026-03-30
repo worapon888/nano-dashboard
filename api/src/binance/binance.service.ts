@@ -46,7 +46,7 @@ export class BinanceService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    // 🔥 บังคับให้ต้องมี ENV จริงเท่านั้น
+    // Fail fast at startup when the upstream base URL is missing.
     this.baseUrl = this.configService.getOrThrow<string>('BINANCE_BASE_URL');
   }
 

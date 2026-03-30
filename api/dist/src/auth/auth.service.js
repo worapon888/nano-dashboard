@@ -41,21 +41,29 @@ var __importStar = (this && this.__importStar) || (function () {
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var AuthService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const client_1 = require("@prisma/client");
 const bcrypt = __importStar(require("bcrypt"));
+const events_tokens_1 = require("../events/events.tokens");
 const prisma_service_1 = require("../prisma/prisma.service");
 const ACCESS_TOKEN_EXPIRES_IN = '15m';
 const PASSWORD_SALT_ROUNDS = 12;
-let AuthService = class AuthService {
+let AuthService = AuthService_1 = class AuthService {
     prisma;
     jwtService;
-    constructor(prisma, jwtService) {
+    userEventsPublisher;
+    logger = new common_1.Logger(AuthService_1.name);
+    constructor(prisma, jwtService, userEventsPublisher) {
         this.prisma = prisma;
         this.jwtService = jwtService;
+        this.userEventsPublisher = userEventsPublisher;
     }
     async register(registerDto) {
         const email = this.normalizeEmail(registerDto.email);
@@ -67,16 +75,32 @@ let AuthService = class AuthService {
             throw new common_1.ConflictException('Email already exists');
         }
         const passwordHash = await bcrypt.hash(registerDto.password, PASSWORD_SALT_ROUNDS);
-        const user = await this.prisma.user.create({
-            data: {
-                email,
-                passwordHash,
-                displayName: registerDto.displayName.trim(),
-                role: client_1.UserRole.USER,
-                isActive: true,
-            },
-        });
-        return this.toSafeUser(user);
+        let user;
+        try {
+            user = await this.prisma.user.create({
+                data: {
+                    email,
+                    passwordHash,
+                    displayName: registerDto.displayName.trim(),
+                    role: client_1.UserRole.USER,
+                    isActive: true,
+                },
+            });
+        }
+        catch (error) {
+            if (this.isUniqueEmailConstraintError(error)) {
+                throw new common_1.ConflictException('Email already exists');
+            }
+            throw error;
+        }
+        const safeUser = this.toSafeUser(user);
+        try {
+            await this.userEventsPublisher?.publishUserCreated(safeUser);
+        }
+        catch (error) {
+            this.logger.warn(`Non-blocking event delivery failed for user.created (userId=${safeUser.id}, email=${safeUser.email}): ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+        return safeUser;
     }
     async login(loginDto) {
         const email = this.normalizeEmail(loginDto.email);
@@ -119,6 +143,15 @@ let AuthService = class AuthService {
     normalizeEmail(email) {
         return email.trim().toLowerCase();
     }
+    isUniqueEmailConstraintError(error) {
+        if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+            return error.code === 'P2002';
+        }
+        return (typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            error.code === 'P2002');
+    }
     toSafeUser(user) {
         return {
             id: user.id,
@@ -131,9 +164,11 @@ let AuthService = class AuthService {
     }
 };
 exports.AuthService = AuthService;
-exports.AuthService = AuthService = __decorate([
+exports.AuthService = AuthService = AuthService_1 = __decorate([
     (0, common_1.Injectable)(),
+    __param(2, (0, common_1.Optional)()),
+    __param(2, (0, common_1.Inject)(events_tokens_1.USER_EVENTS_PUBLISHER)),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        jwt_1.JwtService])
+        jwt_1.JwtService, Object])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

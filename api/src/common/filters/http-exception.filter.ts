@@ -27,9 +27,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exceptionResponse !== null &&
       'message' in exceptionResponse
         ? (exceptionResponse as { message: string | string[] }).message
-        : exception instanceof Error
-          ? exception.message
-          : 'Internal server error';
+        : 'Internal server error';
 
     response.status(statusCode).send({
       success: false,

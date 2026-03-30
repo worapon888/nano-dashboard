@@ -5,6 +5,7 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
@@ -15,6 +16,7 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
+  app.useWebSocketAdapter(new WsAdapter(app));
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({

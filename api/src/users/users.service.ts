@@ -1,5 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { USER_EVENTS_PUBLISHER } from '../events/events.tokens';
+import type { UserEventsPublisher } from '../events/events.tokens';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
@@ -16,17 +24,19 @@ const USER_SELECT = {
   updatedAt: true,
 } satisfies Prisma.UserSelect;
 
-const ACTIVE_USER_COUNT_CACHE_KEY = 'app:user:active_count';
+const ACTIVE_USER_COUNT_CACHE_KEY = 'app:users:active-count';
 const DASHBOARD_SUMMARY_CACHE_KEY = 'app:dashboard:summary';
-
-const getUserDashboardSummaryCacheKey = (userId: string) =>
-  `dashboard:summary:${userId}`;
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    @Optional()
+    @Inject(USER_EVENTS_PUBLISHER)
+    private readonly userEventsPublisher?: UserEventsPublisher,
   ) {}
 
   async findAll(query: GetUsersQueryDto) {
@@ -103,9 +113,24 @@ export class UsersService {
       select: USER_SELECT,
     });
 
-    await this.invalidateUserCaches(id);
+    await this.invalidateUserCaches();
 
-    return this.toUserResponse(user);
+    const response = this.toUserResponse(user);
+
+    // Fire-and-forget: broadcast failures must not fail the mutation.
+    try {
+      await this.userEventsPublisher?.publishUserUpdated(
+        response as unknown as Record<string, unknown>,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Non-blocking event delivery failed for user.updated (userId=${response.id}): ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
+    }
+
+    return response;
   }
 
   async softDeleteById(id: string) {
@@ -119,9 +144,7 @@ export class UsersService {
       },
     });
 
-    await this.invalidateUserCaches(id);
-
-    return { success: true };
+    await this.invalidateUserCaches();
   }
 
   async getActiveCount() {
@@ -197,11 +220,18 @@ export class UsersService {
     };
   }
 
-  private async invalidateUserCaches(userId: string) {
-    await Promise.all([
-      this.redisService.del(ACTIVE_USER_COUNT_CACHE_KEY),
-      this.redisService.del(DASHBOARD_SUMMARY_CACHE_KEY),
-      this.redisService.del(getUserDashboardSummaryCacheKey(userId)),
-    ]);
+  private async invalidateUserCaches() {
+    try {
+      await Promise.all([
+        this.redisService.del(ACTIVE_USER_COUNT_CACHE_KEY),
+        this.redisService.del(DASHBOARD_SUMMARY_CACHE_KEY),
+      ]);
+    } catch (error) {
+      this.logger.warn(
+        `User cache invalidation failed: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
+    }
   }
 }

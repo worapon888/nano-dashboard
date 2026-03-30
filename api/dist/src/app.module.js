@@ -12,6 +12,7 @@ const config_1 = require("@nestjs/config");
 const auth_module_1 = require("./auth/auth.module");
 const binance_module_1 = require("./binance/binance.module");
 const dashboard_module_1 = require("./dashboard/dashboard.module");
+const events_module_1 = require("./events/events.module");
 const market_data_module_1 = require("./market-data/market-data.module");
 const prisma_module_1 = require("./prisma/prisma.module");
 const redis_module_1 = require("./redis/redis.module");
@@ -25,6 +26,7 @@ exports.AppModule = AppModule = __decorate([
             config_1.ConfigModule.forRoot({ isGlobal: true }),
             prisma_module_1.PrismaModule,
             redis_module_1.RedisModule,
+            events_module_1.EventsModule,
             users_module_1.UsersModule,
             auth_module_1.AuthModule,
             binance_module_1.BinanceModule,

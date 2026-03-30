@@ -8,9 +8,14 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var UsersService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersService = void 0;
 const common_1 = require("@nestjs/common");
+const events_tokens_1 = require("../events/events.tokens");
 const prisma_service_1 = require("../prisma/prisma.service");
 const redis_service_1 = require("../redis/redis.service");
 const USER_SELECT = {
@@ -22,15 +27,17 @@ const USER_SELECT = {
     createdAt: true,
     updatedAt: true,
 };
-const ACTIVE_USER_COUNT_CACHE_KEY = 'app:user:active_count';
+const ACTIVE_USER_COUNT_CACHE_KEY = 'app:users:active-count';
 const DASHBOARD_SUMMARY_CACHE_KEY = 'app:dashboard:summary';
-const getUserDashboardSummaryCacheKey = (userId) => `dashboard:summary:${userId}`;
-let UsersService = class UsersService {
+let UsersService = UsersService_1 = class UsersService {
     prisma;
     redisService;
-    constructor(prisma, redisService) {
+    userEventsPublisher;
+    logger = new common_1.Logger(UsersService_1.name);
+    constructor(prisma, redisService, userEventsPublisher) {
         this.prisma = prisma;
         this.redisService = redisService;
+        this.userEventsPublisher = userEventsPublisher;
     }
     async findAll(query) {
         const page = query.page ?? 1;
@@ -96,8 +103,15 @@ let UsersService = class UsersService {
             },
             select: USER_SELECT,
         });
-        await this.invalidateUserCaches(id);
-        return this.toUserResponse(user);
+        await this.invalidateUserCaches();
+        const response = this.toUserResponse(user);
+        try {
+            await this.userEventsPublisher?.publishUserUpdated(response);
+        }
+        catch (error) {
+            this.logger.warn(`Non-blocking event delivery failed for user.updated (userId=${response.id}): ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+        return response;
     }
     async softDeleteById(id) {
         await this.ensureUserExists(id);
@@ -108,8 +122,7 @@ let UsersService = class UsersService {
                 deletedAt: new Date(),
             },
         });
-        await this.invalidateUserCaches(id);
-        return { success: true };
+        await this.invalidateUserCaches();
     }
     async getActiveCount() {
         const cachedCount = await this.redisService.get(ACTIVE_USER_COUNT_CACHE_KEY);
@@ -170,18 +183,24 @@ let UsersService = class UsersService {
             updatedAt: user.updatedAt,
         };
     }
-    async invalidateUserCaches(userId) {
-        await Promise.all([
-            this.redisService.del(ACTIVE_USER_COUNT_CACHE_KEY),
-            this.redisService.del(DASHBOARD_SUMMARY_CACHE_KEY),
-            this.redisService.del(getUserDashboardSummaryCacheKey(userId)),
-        ]);
+    async invalidateUserCaches() {
+        try {
+            await Promise.all([
+                this.redisService.del(ACTIVE_USER_COUNT_CACHE_KEY),
+                this.redisService.del(DASHBOARD_SUMMARY_CACHE_KEY),
+            ]);
+        }
+        catch (error) {
+            this.logger.warn(`User cache invalidation failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
 };
 exports.UsersService = UsersService;
-exports.UsersService = UsersService = __decorate([
+exports.UsersService = UsersService = UsersService_1 = __decorate([
     (0, common_1.Injectable)(),
+    __param(2, (0, common_1.Optional)()),
+    __param(2, (0, common_1.Inject)(events_tokens_1.USER_EVENTS_PUBLISHER)),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        redis_service_1.RedisService])
+        redis_service_1.RedisService, Object])
 ], UsersService);
 //# sourceMappingURL=users.service.js.map

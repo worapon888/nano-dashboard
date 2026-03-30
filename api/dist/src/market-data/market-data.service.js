@@ -17,19 +17,54 @@ exports.MarketDataService = void 0;
 const common_1 = require("@nestjs/common");
 const binance_service_1 = require("../binance/binance.service");
 const cache_service_1 = require("../cache/cache.service");
+const events_tokens_1 = require("../events/events.tokens");
 const HOT_CACHE_TTL_SECONDS = 10;
 const STALE_CACHE_TTL_SECONDS = 120;
 const LOCK_TTL_SECONDS = 5;
 const WAITER_TIMEOUT_MS = 6000;
+const DEFAULT_MOVER_SYMBOLS = [
+    'BTCUSDT',
+    'ETHUSDT',
+    'SOLUSDT',
+    'BNBUSDT',
+    'XRPUSDT',
+];
 let MarketDataService = MarketDataService_1 = class MarketDataService {
     binanceService;
     cacheService;
-    tickerGateway;
+    marketEventsPublisher;
     logger = new common_1.Logger(MarketDataService_1.name);
-    constructor(binanceService, cacheService, tickerGateway) {
+    constructor(binanceService, cacheService, marketEventsPublisher) {
         this.binanceService = binanceService;
         this.cacheService = cacheService;
-        this.tickerGateway = tickerGateway;
+        this.marketEventsPublisher = marketEventsPublisher;
+    }
+    async getTrackedTickers(limit) {
+        const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 5;
+        const symbols = DEFAULT_MOVER_SYMBOLS.slice(0, safeLimit);
+        const results = await Promise.allSettled(symbols.map(async (symbol) => {
+            const hot = await this.cacheService.get(this.getHotCacheKey(symbol));
+            if (hot)
+                return this.toDashboardTickerDto(hot);
+            const stale = await this.cacheService.get(this.getStaleCacheKey(symbol));
+            if (stale)
+                return this.toDashboardTickerDto(stale);
+            return null;
+        }));
+        return results
+            .filter((r) => r.status === 'fulfilled' && r.value !== null)
+            .map((r) => r.value);
+    }
+    toDashboardTickerDto(ticker) {
+        return {
+            symbol: ticker.symbol,
+            price: ticker.price,
+            volume24h: ticker.volume24h ?? null,
+            priceChange24h: ticker.priceChange24h ?? null,
+            high24h: ticker.high24h ?? null,
+            low24h: ticker.low24h ?? null,
+            fetchedAt: ticker.fetchedAt,
+        };
     }
     async getTicker(symbol) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
@@ -49,7 +84,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
             return this.fetchAndCacheTicker(normalizedSymbol, hotCacheKey, lockKey);
         }
         this.logger.log(`Ticker waiter subscribed for ${normalizedSymbol}`);
-        return this.waitForFetcherOrFallback(normalizedSymbol);
+        return this.waitForFetcherOrFallback(normalizedSymbol, hotCacheKey);
     }
     async fetchAndCacheTicker(symbol, hotCacheKey, lockKey) {
         const channel = this.getChannelKey(symbol);
@@ -68,8 +103,14 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         await this.broadcastFetcherUpdate(symbol, ticker);
         return this.withCacheSource(ticker, 'fresh');
     }
-    async waitForFetcherOrFallback(symbol) {
+    async waitForFetcherOrFallback(symbol, hotCacheKey) {
         const channel = this.getChannelKey(symbol);
+        const hotTicker = await this.cacheService.get(hotCacheKey);
+        if (hotTicker) {
+            this.logger.log(`Ticker hot cache won race for ${symbol}`);
+            await this.backfillStaleCacheIfMissing(symbol, hotTicker);
+            return this.withCacheSource(hotTicker, 'hot');
+        }
         try {
             const publishedTicker = await this.cacheService.subscribeOnce(channel, WAITER_TIMEOUT_MS);
             if (publishedTicker) {
@@ -78,6 +119,12 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
         catch (error) {
             this.logger.warn(`Pub/sub wait failed for ${symbol}, falling back to stale cache`, error instanceof Error ? error.stack : undefined);
+        }
+        const cachedTicker = await this.cacheService.get(hotCacheKey);
+        if (cachedTicker) {
+            this.logger.log(`Ticker hot cache filled while waiting for ${symbol}`);
+            await this.backfillStaleCacheIfMissing(symbol, cachedTicker);
+            return this.withCacheSource(cachedTicker, 'hot');
         }
         return this.getStaleTickerOrThrow(symbol);
     }
@@ -107,11 +154,11 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
     }
     async broadcastFetcherUpdate(symbol, ticker) {
-        if (!this.tickerGateway?.broadcastTicker) {
+        if (!this.marketEventsPublisher?.publishTicker) {
             return;
         }
         try {
-            await this.tickerGateway.broadcastTicker(`ticker:${symbol}`, ticker);
+            await this.marketEventsPublisher.publishTicker(`ticker:${symbol}`, ticker);
         }
         catch (error) {
             this.logger.warn(`Ticker websocket broadcast failed for ${symbol}`, error instanceof Error ? error.stack : undefined);
@@ -163,7 +210,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         return symbol.trim().toUpperCase();
     }
     getHotCacheKey(symbol) {
-        return `app:ticker:${symbol}`;
+        return `app:ticker:${symbol}:hot`;
     }
     getStaleCacheKey(symbol) {
         return `app:ticker:${symbol}:stale`;
@@ -179,7 +226,7 @@ exports.MarketDataService = MarketDataService;
 exports.MarketDataService = MarketDataService = MarketDataService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(2, (0, common_1.Optional)()),
-    __param(2, (0, common_1.Inject)('MARKET_TICKER_GATEWAY')),
+    __param(2, (0, common_1.Inject)(events_tokens_1.MARKET_EVENTS_PUBLISHER)),
     __metadata("design:paramtypes", [binance_service_1.BinanceService,
         cache_service_1.CacheService, Object])
 ], MarketDataService);

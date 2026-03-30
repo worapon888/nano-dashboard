@@ -15,6 +15,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { CurrentUserPayload } from '../auth/interfaces/current-user-payload.interface';
+import { successResponse } from '../common/utils/api-response.util';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
@@ -27,20 +28,27 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   @Get()
   async findAll(@Query() query: GetUsersQueryDto) {
-    return this.usersService.findAll(query);
+    const result = await this.usersService.findAll(query);
+    return successResponse(
+      result.items,
+      'Users retrieved successfully',
+      result.meta,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@CurrentUser() currentUser: CurrentUserPayload) {
-    return this.usersService.getMe(currentUser.sub);
+    const user = await this.usersService.getMe(currentUser.sub);
+    return successResponse(user, 'Authenticated user retrieved successfully');
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get(':id')
   async findById(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.usersService.findById(id);
+    const user = await this.usersService.findById(id);
+    return successResponse(user, 'User retrieved successfully');
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,13 +58,15 @@ export class UsersController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    return this.usersService.updateById(id, updateUserDto);
+    const user = await this.usersService.updateById(id, updateUserDto);
+    return successResponse(user, 'User updated successfully');
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Delete(':id')
   async softDeleteById(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.usersService.softDeleteById(id);
+    await this.usersService.softDeleteById(id);
+    return successResponse(null, 'User deleted successfully');
   }
 }

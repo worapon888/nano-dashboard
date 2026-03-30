@@ -19,6 +19,7 @@ const current_user_decorator_1 = require("../auth/decorators/current-user.decora
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
+const api_response_util_1 = require("../common/utils/api-response.util");
 const get_users_query_dto_1 = require("./dto/get-users-query.dto");
 const update_user_dto_1 = require("./dto/update-user.dto");
 const users_service_1 = require("./users.service");
@@ -28,19 +29,24 @@ let UsersController = class UsersController {
         this.usersService = usersService;
     }
     async findAll(query) {
-        return this.usersService.findAll(query);
+        const result = await this.usersService.findAll(query);
+        return (0, api_response_util_1.successResponse)(result.items, 'Users retrieved successfully', result.meta);
     }
     async getMe(currentUser) {
-        return this.usersService.getMe(currentUser.sub);
+        const user = await this.usersService.getMe(currentUser.sub);
+        return (0, api_response_util_1.successResponse)(user, 'Authenticated user retrieved successfully');
     }
     async findById(id) {
-        return this.usersService.findById(id);
+        const user = await this.usersService.findById(id);
+        return (0, api_response_util_1.successResponse)(user, 'User retrieved successfully');
     }
     async updateById(id, updateUserDto) {
-        return this.usersService.updateById(id, updateUserDto);
+        const user = await this.usersService.updateById(id, updateUserDto);
+        return (0, api_response_util_1.successResponse)(user, 'User updated successfully');
     }
     async softDeleteById(id) {
-        return this.usersService.softDeleteById(id);
+        await this.usersService.softDeleteById(id);
+        return (0, api_response_util_1.successResponse)(null, 'User deleted successfully');
     }
 };
 exports.UsersController = UsersController;
