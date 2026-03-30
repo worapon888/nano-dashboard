@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  displayName  String   @map("display_name") @db.VarChar(120)
+  role         UserRole @default(USER)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model CryptoPrice {
+  id              String         @id @default(uuid()) @db.Uuid
+  symbol          String         @unique @db.VarChar(30)
+  price           Decimal        @db.Decimal(30, 10)
+  volume24h       Decimal        @map("volume_24h") @db.Decimal(30, 10)
+  priceChange24h  Decimal        @map("price_change_24h") @db.Decimal(20, 8)
+  high24h         Decimal        @map("high_24h") @db.Decimal(30, 10)
+  low24h          Decimal        @map("low_24h") @db.Decimal(30, 10)
+  source          String         @db.VarChar(50)
+  fetchedAt       DateTime       @map("fetched_at") @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  priceHistories  PriceHistory[]
+
+  @@index([symbol])
+  @@index([fetchedAt])
+  @@index([symbol, fetchedAt])
+  @@index([source])
+  @@map("crypto_prices")
+}
+
+model PriceHistory {
+  id             String      @id @default(uuid()) @db.Uuid
+  cryptoPriceId  String      @map("crypto_price_id") @db.Uuid
+  symbol         String      @db.VarChar(30)
+  price          Decimal     @db.Decimal(30, 10)
+  volume24h      Decimal     @map("volume_24h") @db.Decimal(30, 10)
+  priceChange24h Decimal     @map("price_change_24h") @db.Decimal(20, 8)
+  high24h        Decimal     @map("high_24h") @db.Decimal(30, 10)
+  low24h         Decimal     @map("low_24h") @db.Decimal(30, 10)
+  source         String      @db.VarChar(50)
+  recordedAt     DateTime    @map("recorded_at") @db.Timestamptz(6)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  cryptoPrice    CryptoPrice @relation(fields: [cryptoPriceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([cryptoPriceId])
+  @@index([symbol])
+  @@index([recordedAt])
+  @@index([symbol, recordedAt])
+  @@map("price_history")
+}
