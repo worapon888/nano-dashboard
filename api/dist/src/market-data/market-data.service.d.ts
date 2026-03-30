@@ -20,6 +20,9 @@ export declare class MarketDataService {
     private writeTickerCaches;
     private backfillStaleCacheIfMissing;
     private isBinanceUnavailableError;
+    private withCacheSource;
+    private stripRuntimeCacheFlags;
+    private isStaleTicker;
     private normalizeSymbol;
     private getHotCacheKey;
     private getStaleCacheKey;

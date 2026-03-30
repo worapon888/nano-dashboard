@@ -20,8 +20,10 @@ type BinanceTickerResponse = {
 
 const BINANCE_REQUEST_TIMEOUT_MS = 5000;
 const BINANCE_MAX_ATTEMPTS = 4;
+
 const RETRYABLE_HTTP_STATUS_CODES = new Set([429, 502, 503, 504]);
 const NON_RETRYABLE_HTTP_STATUS_CODES = new Set([400, 403, 418]);
+
 const RETRYABLE_NETWORK_CODES = new Set([
   'ECONNABORTED',
   'ECONNREFUSED',
@@ -44,16 +46,15 @@ export class BinanceService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.baseUrl =
-      this.configService.get<string>('BINANCE_BASE_URL') ??
-      'https://api.binance.com';
+    // 🔥 บังคับให้ต้องมี ENV จริงเท่านั้น
+    this.baseUrl = this.configService.getOrThrow<string>('BINANCE_BASE_URL');
   }
 
   async getTicker(symbol: string): Promise<TickerDto> {
     const normalizedSymbol = symbol.toUpperCase();
     let lastError: unknown;
 
-    for (let attempt = 1; attempt <= BINANCE_MAX_ATTEMPTS; attempt += 1) {
+    for (let attempt = 1; attempt <= BINANCE_MAX_ATTEMPTS; attempt++) {
       try {
         const response = await firstValueFrom(
           this.httpService.get<BinanceTickerResponse>(
@@ -74,9 +75,11 @@ export class BinanceService {
         }
 
         const delayMs = this.getRetryDelayMs(attempt);
+
         this.logger.warn(
-          `Retrying Binance ticker fetch for ${normalizedSymbol} after attempt ${attempt} failed`,
+          `Retrying Binance ticker fetch for ${normalizedSymbol} (attempt ${attempt})`,
         );
+
         await this.sleep(delayMs);
       }
     }
@@ -102,8 +105,8 @@ export class BinanceService {
 
   private shouldRetry(error: unknown): boolean {
     const axiosError = error as AxiosError | undefined;
-    const statusCode = axiosError?.response?.status;
 
+    const statusCode = axiosError?.response?.status;
     if (statusCode && NON_RETRYABLE_HTTP_STATUS_CODES.has(statusCode)) {
       return false;
     }
@@ -127,8 +130,10 @@ export class BinanceService {
     error: unknown,
   ): BinanceUnavailableException {
     const axiosError = error as AxiosError | undefined;
+
     const statusCode = axiosError?.response?.status;
     const errorCode = axiosError?.code;
+
     const detail = statusCode
       ? `status ${statusCode}`
       : (errorCode ?? 'unknown');

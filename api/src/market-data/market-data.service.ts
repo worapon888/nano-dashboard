@@ -12,7 +12,7 @@ import {
 import { CacheService } from '../cache/cache.service';
 import { TickerDto } from './dto/ticker.dto';
 
-const HOT_CACHE_TTL_SECONDS = 2;
+const HOT_CACHE_TTL_SECONDS = 10;
 const STALE_CACHE_TTL_SECONDS = 120;
 const LOCK_TTL_SECONDS = 5;
 const WAITER_TIMEOUT_MS = 6000;
@@ -41,7 +41,7 @@ export class MarketDataService {
     if (cachedTicker) {
       this.logger.log(`Ticker hot cache hit for ${normalizedSymbol}`);
       await this.backfillStaleCacheIfMissing(normalizedSymbol, cachedTicker);
-      return cachedTicker;
+      return this.withCacheSource(cachedTicker, 'hot');
     }
 
     this.logger.log(`Ticker hot cache miss for ${normalizedSymbol}`);
@@ -71,6 +71,11 @@ export class MarketDataService {
     const channel = this.getChannelKey(symbol);
     const ticker = await this.getTickerFromBinanceOrFallback(symbol);
 
+    if (this.isStaleTicker(ticker)) {
+      await this.cacheService.del(lockKey);
+      return ticker;
+    }
+
     try {
       await this.writeTickerCaches(symbol, hotCacheKey, ticker);
     } finally {
@@ -80,7 +85,7 @@ export class MarketDataService {
     await this.publishTickerUpdate(symbol, channel, ticker);
     await this.broadcastFetcherUpdate(symbol, ticker);
 
-    return ticker;
+    return this.withCacheSource(ticker, 'fresh');
   }
 
   private async waitForFetcherOrFallback(symbol: string): Promise<TickerDto> {
@@ -93,7 +98,7 @@ export class MarketDataService {
       );
 
       if (publishedTicker) {
-        return publishedTicker;
+        return this.withCacheSource(publishedTicker, 'fresh');
       }
     } catch (error) {
       this.logger.warn(
@@ -112,10 +117,7 @@ export class MarketDataService {
 
     if (staleTicker) {
       this.logger.warn(`Ticker stale fallback served for ${symbol}`);
-      return {
-        ...staleTicker,
-        stale: true,
-      };
+      return this.withCacheSource(staleTicker, 'stale');
     }
 
     this.logger.warn(`Stale cache miss for key ${staleCacheKey}`);
@@ -131,7 +133,7 @@ export class MarketDataService {
     try {
       const ticker = await this.binanceService.getTicker(symbol);
       this.logger.log(`Ticker Binance fetch success for ${symbol}`);
-      return ticker;
+      return this.stripRuntimeCacheFlags(ticker);
     } catch (error) {
       if (this.isBinanceUnavailableError(error)) {
         return this.getStaleTickerOrThrow(symbol);
@@ -180,9 +182,18 @@ export class MarketDataService {
     ticker: TickerDto,
   ): Promise<void> {
     const staleCacheKey = this.getStaleCacheKey(symbol);
+    const cachePayload = this.stripRuntimeCacheFlags(ticker);
 
-    await this.cacheService.set(hotCacheKey, ticker, HOT_CACHE_TTL_SECONDS);
-    await this.cacheService.set(staleCacheKey, ticker, STALE_CACHE_TTL_SECONDS);
+    await this.cacheService.set(
+      hotCacheKey,
+      cachePayload,
+      HOT_CACHE_TTL_SECONDS,
+    );
+    await this.cacheService.set(
+      staleCacheKey,
+      cachePayload,
+      STALE_CACHE_TTL_SECONDS,
+    );
 
     this.logger.log(`Ticker stale cache written with key ${staleCacheKey}`);
   }
@@ -198,7 +209,11 @@ export class MarketDataService {
       return;
     }
 
-    await this.cacheService.set(staleCacheKey, ticker, STALE_CACHE_TTL_SECONDS);
+    await this.cacheService.set(
+      staleCacheKey,
+      this.stripRuntimeCacheFlags(ticker),
+      STALE_CACHE_TTL_SECONDS,
+    );
     this.logger.log(`Ticker stale cache written with key ${staleCacheKey}`);
   }
 
@@ -207,6 +222,26 @@ export class MarketDataService {
       error instanceof BinanceUnavailableException ||
       error instanceof ServiceUnavailableException
     );
+  }
+
+  private withCacheSource(
+    ticker: TickerDto,
+    cacheSource: 'fresh' | 'hot' | 'stale',
+  ): TickerDto {
+    return {
+      ...this.stripRuntimeCacheFlags(ticker),
+      cacheSource,
+      ...(cacheSource === 'stale' ? { stale: true } : {}),
+    };
+  }
+
+  private stripRuntimeCacheFlags(ticker: TickerDto): TickerDto {
+    const { cacheSource: _cacheSource, stale: _stale, ...baseTicker } = ticker;
+    return baseTicker;
+  }
+
+  private isStaleTicker(ticker: TickerDto): boolean {
+    return ticker.cacheSource === 'stale' || ticker.stale === true;
   }
 
   private normalizeSymbol(symbol: string): string {

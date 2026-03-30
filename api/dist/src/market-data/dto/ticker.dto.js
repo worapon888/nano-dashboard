@@ -10,6 +10,7 @@ class TickerDto {
     low24h;
     fetchedAt;
     source;
+    cacheSource;
     stale;
 }
 exports.TickerDto = TickerDto;

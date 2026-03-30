@@ -39,14 +39,12 @@ let BinanceService = BinanceService_1 = class BinanceService {
     constructor(httpService, configService) {
         this.httpService = httpService;
         this.configService = configService;
-        this.baseUrl =
-            this.configService.get('BINANCE_BASE_URL') ??
-                'https://api.binance.com';
+        this.baseUrl = this.configService.getOrThrow('BINANCE_BASE_URL');
     }
     async getTicker(symbol) {
         const normalizedSymbol = symbol.toUpperCase();
         let lastError;
-        for (let attempt = 1; attempt <= BINANCE_MAX_ATTEMPTS; attempt += 1) {
+        for (let attempt = 1; attempt <= BINANCE_MAX_ATTEMPTS; attempt++) {
             try {
                 const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.baseUrl}/api/v3/ticker/24hr`, {
                     params: { symbol: normalizedSymbol },
@@ -60,7 +58,7 @@ let BinanceService = BinanceService_1 = class BinanceService {
                     break;
                 }
                 const delayMs = this.getRetryDelayMs(attempt);
-                this.logger.warn(`Retrying Binance ticker fetch for ${normalizedSymbol} after attempt ${attempt} failed`);
+                this.logger.warn(`Retrying Binance ticker fetch for ${normalizedSymbol} (attempt ${attempt})`);
                 await this.sleep(delayMs);
             }
         }

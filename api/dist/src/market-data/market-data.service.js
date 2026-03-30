@@ -17,7 +17,7 @@ exports.MarketDataService = void 0;
 const common_1 = require("@nestjs/common");
 const binance_service_1 = require("../binance/binance.service");
 const cache_service_1 = require("../cache/cache.service");
-const HOT_CACHE_TTL_SECONDS = 2;
+const HOT_CACHE_TTL_SECONDS = 10;
 const STALE_CACHE_TTL_SECONDS = 120;
 const LOCK_TTL_SECONDS = 5;
 const WAITER_TIMEOUT_MS = 6000;
@@ -38,7 +38,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         if (cachedTicker) {
             this.logger.log(`Ticker hot cache hit for ${normalizedSymbol}`);
             await this.backfillStaleCacheIfMissing(normalizedSymbol, cachedTicker);
-            return cachedTicker;
+            return this.withCacheSource(cachedTicker, 'hot');
         }
         this.logger.log(`Ticker hot cache miss for ${normalizedSymbol}`);
         const lockKey = this.getLockKey(normalizedSymbol);
@@ -54,6 +54,10 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
     async fetchAndCacheTicker(symbol, hotCacheKey, lockKey) {
         const channel = this.getChannelKey(symbol);
         const ticker = await this.getTickerFromBinanceOrFallback(symbol);
+        if (this.isStaleTicker(ticker)) {
+            await this.cacheService.del(lockKey);
+            return ticker;
+        }
         try {
             await this.writeTickerCaches(symbol, hotCacheKey, ticker);
         }
@@ -62,14 +66,14 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
         await this.publishTickerUpdate(symbol, channel, ticker);
         await this.broadcastFetcherUpdate(symbol, ticker);
-        return ticker;
+        return this.withCacheSource(ticker, 'fresh');
     }
     async waitForFetcherOrFallback(symbol) {
         const channel = this.getChannelKey(symbol);
         try {
             const publishedTicker = await this.cacheService.subscribeOnce(channel, WAITER_TIMEOUT_MS);
             if (publishedTicker) {
-                return publishedTicker;
+                return this.withCacheSource(publishedTicker, 'fresh');
             }
         }
         catch (error) {
@@ -83,10 +87,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         const staleTicker = await this.cacheService.get(staleCacheKey);
         if (staleTicker) {
             this.logger.warn(`Ticker stale fallback served for ${symbol}`);
-            return {
-                ...staleTicker,
-                stale: true,
-            };
+            return this.withCacheSource(staleTicker, 'stale');
         }
         this.logger.warn(`Stale cache miss for key ${staleCacheKey}`);
         this.logger.error(`No fresh or stale market data available for ${symbol}`);
@@ -96,7 +97,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         try {
             const ticker = await this.binanceService.getTicker(symbol);
             this.logger.log(`Ticker Binance fetch success for ${symbol}`);
-            return ticker;
+            return this.stripRuntimeCacheFlags(ticker);
         }
         catch (error) {
             if (this.isBinanceUnavailableError(error)) {
@@ -126,8 +127,9 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
     }
     async writeTickerCaches(symbol, hotCacheKey, ticker) {
         const staleCacheKey = this.getStaleCacheKey(symbol);
-        await this.cacheService.set(hotCacheKey, ticker, HOT_CACHE_TTL_SECONDS);
-        await this.cacheService.set(staleCacheKey, ticker, STALE_CACHE_TTL_SECONDS);
+        const cachePayload = this.stripRuntimeCacheFlags(ticker);
+        await this.cacheService.set(hotCacheKey, cachePayload, HOT_CACHE_TTL_SECONDS);
+        await this.cacheService.set(staleCacheKey, cachePayload, STALE_CACHE_TTL_SECONDS);
         this.logger.log(`Ticker stale cache written with key ${staleCacheKey}`);
     }
     async backfillStaleCacheIfMissing(symbol, ticker) {
@@ -136,12 +138,26 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         if (staleTicker) {
             return;
         }
-        await this.cacheService.set(staleCacheKey, ticker, STALE_CACHE_TTL_SECONDS);
+        await this.cacheService.set(staleCacheKey, this.stripRuntimeCacheFlags(ticker), STALE_CACHE_TTL_SECONDS);
         this.logger.log(`Ticker stale cache written with key ${staleCacheKey}`);
     }
     isBinanceUnavailableError(error) {
         return (error instanceof binance_service_1.BinanceUnavailableException ||
             error instanceof common_1.ServiceUnavailableException);
+    }
+    withCacheSource(ticker, cacheSource) {
+        return {
+            ...this.stripRuntimeCacheFlags(ticker),
+            cacheSource,
+            ...(cacheSource === 'stale' ? { stale: true } : {}),
+        };
+    }
+    stripRuntimeCacheFlags(ticker) {
+        const { cacheSource: _cacheSource, stale: _stale, ...baseTicker } = ticker;
+        return baseTicker;
+    }
+    isStaleTicker(ticker) {
+        return ticker.cacheSource === 'stale' || ticker.stale === true;
     }
     normalizeSymbol(symbol) {
         return symbol.trim().toUpperCase();

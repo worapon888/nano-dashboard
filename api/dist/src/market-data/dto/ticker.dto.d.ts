@@ -7,5 +7,6 @@ export declare class TickerDto {
     low24h: string | null;
     fetchedAt: string;
     source: string;
+    cacheSource?: 'fresh' | 'hot' | 'stale';
     stale?: boolean;
 }
