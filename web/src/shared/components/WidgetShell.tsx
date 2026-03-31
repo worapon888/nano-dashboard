@@ -1,10 +1,10 @@
 import type {
-  MouseEvent as ReactMouseEvent,
-  MouseEventHandler,
+  PointerEvent as ReactPointerEvent,
+  PointerEventHandler,
   PropsWithChildren,
   ReactNode,
 } from 'react'
-import type { ResizeDirection } from '../../types/resize'
+import type { ResizeDirection } from '../types/resize'
 
 const resizeHandleClassByDirection: Record<ResizeDirection, string> = {
   top: 'inset-x-3 top-0 h-3 -translate-y-1/2 cursor-ns-resize',
@@ -36,10 +36,10 @@ type WidgetShellProps = PropsWithChildren<{
   headerClassName?: string
   bodyClassName?: string
   isResizeActive?: boolean
-  onHeaderMouseDown?: MouseEventHandler<HTMLElement>
-  onResizeHandleMouseDown?: (
+  onHeaderPointerDown?: PointerEventHandler<HTMLElement>
+  onResizeHandlePointerDown?: (
     direction: ResizeDirection,
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLElement>,
   ) => void
 }>
 
@@ -51,8 +51,8 @@ function WidgetShell({
   headerClassName = '',
   bodyClassName = '',
   isResizeActive = false,
-  onHeaderMouseDown,
-  onResizeHandleMouseDown,
+  onHeaderPointerDown,
+  onResizeHandlePointerDown,
   children,
 }: WidgetShellProps) {
   return (
@@ -61,14 +61,14 @@ function WidgetShell({
         isResizeActive ? 'border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.28),0_22px_60px_rgba(0,0,0,0.52)]' : ''
       } ${className}`}
     >
-      {onResizeHandleMouseDown
+      {onResizeHandlePointerDown
         ? resizeDirections.map((direction) => (
             <button
               key={direction}
               type="button"
               aria-label={`Resize widget from ${direction}`}
-              onMouseDown={(event) => onResizeHandleMouseDown(direction, event)}
-              className={`absolute z-20 rounded-full border-0 bg-transparent p-0 opacity-0 outline-none transition-opacity duration-150 hover:opacity-100 focus:opacity-100 ${resizeHandleClassByDirection[direction]}`}
+              onPointerDown={(event) => onResizeHandlePointerDown(direction, event)}
+              className={`absolute z-20 rounded-full border-0 bg-transparent p-0 opacity-0 outline-none transition-opacity duration-150 hover:opacity-100 focus:opacity-100 touch-none ${resizeHandleClassByDirection[direction]}`}
             >
               <span
                 aria-hidden="true"
@@ -81,8 +81,8 @@ function WidgetShell({
         : null}
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[inherit]">
         <header
-          onMouseDown={onHeaderMouseDown}
-          className={`relative flex items-start justify-between border-b border-white/8 bg-[#101010] px-4 py-3 sm:px-5 ${headerClassName}`}
+          onPointerDown={onHeaderPointerDown}
+          className={`relative flex items-start justify-between border-b border-white/8 bg-[#101010] px-4 py-3 sm:px-5 ${onHeaderPointerDown ? 'touch-none' : ''} ${headerClassName}`}
         >
           <div className="min-w-0">
             <h2 className="truncate text-[0.95rem] font-semibold tracking-[0.01em] text-slate-100">

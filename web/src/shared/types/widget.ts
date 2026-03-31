@@ -12,12 +12,25 @@ export type PieChartSeries = {
 
 export type ChartSeries = CartesianChartSeries | PieChartSeries
 
+export type ChartWidgetVariant =
+  | 'default'
+  | 'market-trend'
+  | 'volume-profile'
+  | 'daily-pnl'
+  | 'portfolio-breakdown'
+
+export type ChartWidgetPresentation = {
+  variant?: ChartWidgetVariant
+  rangeLabels?: string[]
+}
+
 export type ChartWidgetConfig = {
   id: string
   title: string
   chartType: ChartType
   series: ChartSeries[]
   categories?: string[]
+  presentation?: ChartWidgetPresentation
 }
 
 // ─── Table widget types ──────────────────────────────────────────────────────

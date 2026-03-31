@@ -1,4 +1,4 @@
-import type { OrderRow } from '../../../types/widget'
+import type { OrderRow } from '../../../shared/types/widget'
 
 export const ordersMock: OrderRow[] = [
   {

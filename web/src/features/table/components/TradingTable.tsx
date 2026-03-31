@@ -1,9 +1,9 @@
-import { Fragment, memo, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
-import WidgetShell from '../base/WidgetShell'
-import useColumnResize from '../../hooks/useColumnResize'
-import type { OrderRow } from '../../types/widget'
-import type { ResizeDirection } from '../../types/resize'
+import { Fragment, memo, useState, type CSSProperties } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
+import WidgetShell from '../../../shared/components/WidgetShell'
+import useColumnResize from '../hooks/useColumnResize'
+import type { OrderRow } from '../../../shared/types/widget'
+import type { ResizeDirection } from '../../../shared/types/resize'
 
 // ─── Column definitions ──────────────────────────────────────────────────────
 
@@ -36,6 +36,10 @@ const INITIAL_WIDTHS: Record<string, number> = Object.fromEntries(
 )
 
 const STORAGE_KEY = 'nanodashboard:trading-table:column-widths'
+
+function getColumnWidthVarName(columnKey: string) {
+  return `--table-col-${columnKey}`
+}
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
@@ -139,10 +143,10 @@ function FilledBar({ filledPct }: { filledPct: number }) {
 
 type ResizableColumnHeaderProps = {
   col: ColumnDef
-  width: number
   isBeingResized: boolean
-  onResizeStart: (key: string, width: number, e: ReactMouseEvent) => void
+  onResizeStart: (key: string, width: number, e: ReactPointerEvent) => void
   onResetWidth: (key: string) => void
+  width: number
 }
 
 function ResizableColumnHeader({
@@ -176,9 +180,9 @@ function ResizableColumnHeader({
         role="separator"
         aria-orientation="vertical"
         aria-label={`Resize ${col.label} column`}
-        onMouseDown={(e) => onResizeStart(col.key, width, e)}
+        onPointerDown={(e) => onResizeStart(col.key, width, e)}
         onDoubleClick={() => onResetWidth(col.key)}
-        className="absolute inset-y-0 right-0 z-20 w-[5px] cursor-col-resize"
+        className="absolute inset-y-0 right-0 z-20 w-[5px] cursor-col-resize touch-none"
       >
         {/* Visual indicator: invisible by default, fades in on hover / active */}
         <div
@@ -227,9 +231,17 @@ type ExpandableRowContentProps = {
   row: OrderRow
   isExpanded: boolean
   colSpan: number
+  panelId: string
+  triggerId: string
 }
 
-function ExpandableRowContent({ row, isExpanded, colSpan }: ExpandableRowContentProps) {
+function ExpandableRowContent({
+  row,
+  isExpanded,
+  colSpan,
+  panelId,
+  triggerId,
+}: ExpandableRowContentProps) {
   const baseCurrency = row.symbol.split('/')[0] ?? ''
 
   return (
@@ -247,6 +259,9 @@ function ExpandableRowContent({ row, isExpanded, colSpan }: ExpandableRowContent
           }}
         >
           <div
+            id={panelId}
+            role="region"
+            aria-labelledby={triggerId}
             style={{
               overflow: 'hidden',
               opacity: isExpanded ? 1 : 0,
@@ -299,48 +314,59 @@ function ExpandableRowContent({ row, isExpanded, colSpan }: ExpandableRowContent
 type TableRowProps = {
   row: OrderRow
   columns: ColumnDef[]
-  columnWidths: Record<string, number>
   isExpanded: boolean
   onToggle: () => void
+  detailPanelId: string
+  triggerId: string
 }
 
 const TableRow = memo(function TableRow({
   row,
   columns,
-  columnWidths,
   isExpanded,
   onToggle,
+  detailPanelId,
+  triggerId,
 }: TableRowProps) {
   return (
     <tr
-      onClick={onToggle}
       className={[
-        'group/row cursor-pointer border-b border-white/[0.04]',
+        'group/row border-b border-white/[0.04]',
         'outline-none transition-colors duration-100',
         isExpanded ? 'bg-white/[0.045]' : 'hover:bg-white/[0.025] active:bg-white/[0.04]',
       ].join(' ')}
     >
       {/* ── Expand chevron ─── */}
       <td className="w-10 py-2.5 pl-3 pr-1">
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-          className={[
-            'mx-auto h-3.5 w-3.5 shrink-0 transition-transform duration-200',
-            isExpanded
-              ? 'rotate-90 text-slate-300'
-              : 'text-slate-600 group-hover/row:text-slate-400',
-          ].join(' ')}
+        <button
+          id={triggerId}
+          type="button"
+          aria-expanded={isExpanded}
+          aria-controls={detailPanelId}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${row.symbol}`}
+          onClick={onToggle}
+          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full outline-none transition-colors hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-emerald-400/60"
         >
-          <path
-            d="M6 3l5 5-5 5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+            className={[
+              'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
+              isExpanded
+                ? 'rotate-90 text-slate-300'
+                : 'text-slate-600 group-hover/row:text-slate-400',
+            ].join(' ')}
+          >
+            <path
+              d="M6 3l5 5-5 5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </td>
 
       {columns.map((col) => {
@@ -391,7 +417,10 @@ const TableRow = memo(function TableRow({
         return (
           <td
             key={col.key}
-            style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
+            style={{
+              width: `var(${getColumnWidthVarName(col.key)})`,
+              maxWidth: `var(${getColumnWidthVarName(col.key)})`,
+            }}
             className={`overflow-hidden text-ellipsis whitespace-nowrap px-3 py-2.5 text-sm ${alignCls}`}
           >
             {cell}
@@ -420,6 +449,14 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
 
   const totalMinWidth =
     EXPAND_COL_WIDTH + COLUMNS.reduce((sum, col) => sum + columnWidths[col.key], 0)
+  const tableColumnStyle = {
+    ...Object.fromEntries(
+      COLUMNS.map((col) => [getColumnWidthVarName(col.key), `${columnWidths[col.key]}px`]),
+    ),
+    tableLayout: 'fixed',
+    width: '100%',
+    minWidth: totalMinWidth,
+  } as CSSProperties
 
   const colSpan = COLUMNS.length + 1
 
@@ -433,16 +470,19 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
      * its own scroll context so the sticky header stays visible.
      * pointer-events-none during widget resize prevents accidental row clicks.
      */
-    <div className={`h-full overflow-auto ${isWidgetResizing ? 'pointer-events-none' : ''}`}>
+    <div
+      data-lenis-prevent
+      className={`h-full overflow-auto ${isWidgetResizing ? 'pointer-events-none' : ''}`}
+    >
       <table
         className="border-separate border-spacing-0"
-        style={{ tableLayout: 'fixed', width: '100%', minWidth: totalMinWidth }}
+        style={tableColumnStyle}
       >
         <colgroup>
           {/* Expand-chevron column */}
           <col style={{ width: EXPAND_COL_WIDTH }} />
           {COLUMNS.map((col) => (
-            <col key={col.key} style={{ width: columnWidths[col.key] }} />
+            <col key={col.key} style={{ width: `var(${getColumnWidthVarName(col.key)})` }} />
           ))}
         </colgroup>
 
@@ -469,22 +509,30 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
 
         {/* ── TableBody ────────────────────────────────────────────────── */}
         <tbody>
-          {rows.map((row) => (
-            <Fragment key={row.id}>
-              <TableRow
-                row={row}
-                columns={COLUMNS}
-                columnWidths={columnWidths}
-                isExpanded={expandedRowId === row.id}
-                onToggle={() => handleToggle(row.id)}
-              />
-              <ExpandableRowContent
-                row={row}
-                isExpanded={expandedRowId === row.id}
-                colSpan={colSpan}
-              />
-            </Fragment>
-          ))}
+          {rows.map((row) => {
+            const detailPanelId = `order-details-${row.id}`
+            const triggerId = `order-toggle-${row.id}`
+
+            return (
+              <Fragment key={row.id}>
+                <TableRow
+                  row={row}
+                  columns={COLUMNS}
+                  isExpanded={expandedRowId === row.id}
+                  onToggle={() => handleToggle(row.id)}
+                  detailPanelId={detailPanelId}
+                  triggerId={triggerId}
+                />
+                <ExpandableRowContent
+                  row={row}
+                  isExpanded={expandedRowId === row.id}
+                  colSpan={colSpan}
+                  panelId={detailPanelId}
+                  triggerId={triggerId}
+                />
+              </Fragment>
+            )
+          })}
 
           {rows.length === 0 ? (
             <tr>
@@ -508,10 +556,10 @@ export type TradingTableProps = {
   isMaximized?: boolean
   isDragging?: boolean
   isResizing?: boolean
-  onDragMouseDown?: (event: ReactMouseEvent<HTMLElement>) => void
-  onResizeHandleMouseDown?: (
+  onDragPointerDown?: (event: ReactPointerEvent<HTMLElement>) => void
+  onResizeHandlePointerDown?: (
     direction: ResizeDirection,
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLElement>,
   ) => void
   onResetToDefault?: () => void
   onMinimizeToggle?: () => void
@@ -525,13 +573,13 @@ function TradingTable({
   isMaximized = false,
   isDragging = false,
   isResizing = false,
-  onDragMouseDown,
-  onResizeHandleMouseDown,
+  onDragPointerDown,
+  onResizeHandlePointerDown,
   onResetToDefault,
   onMinimizeToggle,
   onMaximizeToggle,
 }: TradingTableProps) {
-  function stopEvent(e: ReactMouseEvent<HTMLElement>) {
+  function stopEvent(e: ReactPointerEvent<HTMLElement>) {
     e.preventDefault()
     e.stopPropagation()
   }
@@ -545,21 +593,21 @@ function TradingTable({
       <button
         type="button"
         aria-label={isMinimized ? `Restore ${title}` : `Minimize ${title}`}
-        onMouseDown={stopEvent}
+        onPointerDown={stopEvent}
         onClick={onMinimizeToggle}
         className="h-3 w-3 rounded-full bg-rose-500/90 transition hover:bg-rose-400"
       />
       <button
         type="button"
         aria-label={`Reset ${title} to default size`}
-        onMouseDown={stopEvent}
+        onPointerDown={stopEvent}
         onClick={onResetToDefault}
         className="h-3 w-3 rounded-full bg-amber-400/90 transition hover:bg-amber-300"
       />
       <button
         type="button"
         aria-label={isMaximized ? `Restore ${title}` : `Maximize ${title}`}
-        onMouseDown={stopEvent}
+        onPointerDown={stopEvent}
         onClick={onMaximizeToggle}
         className="h-3 w-3 rounded-full bg-emerald-500/90 transition hover:bg-emerald-400"
       />
@@ -572,13 +620,13 @@ function TradingTable({
       subtitle={`${activeCount} active · ${rows.length} total`}
       action={windowControls}
       className={`relative flex h-full flex-col ${isDragging || isResizing ? 'select-none' : ''}`}
-      headerClassName={onDragMouseDown ? 'cursor-grab active:cursor-grabbing' : ''}
+      headerClassName={onDragPointerDown ? 'cursor-grab active:cursor-grabbing' : ''}
       bodyClassName={isMinimized ? 'overflow-hidden p-0' : 'flex flex-1 flex-col overflow-hidden'}
       isResizeActive={isResizing}
-      onHeaderMouseDown={onDragMouseDown}
-      onResizeHandleMouseDown={
-        onResizeHandleMouseDown && !isMinimized && !isMaximized
-          ? onResizeHandleMouseDown
+      onHeaderPointerDown={onDragPointerDown}
+      onResizeHandlePointerDown={
+        onResizeHandlePointerDown && !isMinimized && !isMaximized
+          ? onResizeHandlePointerDown
           : undefined
       }
     >

@@ -1,100 +1,86 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+
+type UseWidgetDragOptions = {
+  onDragStart: () => void
+  onDrag: (deltaX: number, deltaY: number) => void
+  onDragEnd: () => void
+}
 
 type DragState = {
-  startClientX: number
-  startClientY: number
+  pointerId: number
+  x: number
+  y: number
 }
 
-type UseWidgetDragParams = {
-  onDragStart?: () => void
-  onDrag: (deltaX: number, deltaY: number) => void
-  onDragEnd?: () => void
-}
-
-function useWidgetDrag({ onDragStart, onDrag, onDragEnd }: UseWidgetDragParams) {
-  const dragStateRef = useRef<DragState | null>(null)
-  const restoreStylesRef = useRef<{
-    cursor: string
-    userSelect: string
-  } | null>(null)
+function useWidgetDrag({ onDragStart, onDrag, onDragEnd }: UseWidgetDragOptions) {
   const [isDragging, setIsDragging] = useState(false)
-
-  const stopDragging = useCallback(() => {
-    const wasDragging = dragStateRef.current !== null
-    dragStateRef.current = null
-    setIsDragging(false)
-
-    if (!restoreStylesRef.current) {
-      return
-    }
-
-    document.body.style.cursor = restoreStylesRef.current.cursor
-    document.body.style.userSelect = restoreStylesRef.current.userSelect
-    restoreStylesRef.current = null
-
-    if (wasDragging) {
-      onDragEnd?.()
-    }
-  }, [onDragEnd])
+  const dragStateRef = useRef<DragState | null>(null)
 
   useEffect(() => {
     if (!isDragging) {
       return
     }
 
-    const handleMouseMove = (event: MouseEvent) => {
+    function handlePointerMove(event: PointerEvent) {
       const dragState = dragStateRef.current
 
-      if (!dragState) {
+      if (!dragState || event.pointerId !== dragState.pointerId) {
         return
       }
 
-      onDrag(
-        event.clientX - dragState.startClientX,
-        event.clientY - dragState.startClientY,
-      )
+      onDrag(event.clientX - dragState.x, event.clientY - dragState.y)
     }
 
-    const handleMouseUp = () => {
-      stopDragging()
+    function cleanup(pointerId?: number) {
+      if (pointerId !== undefined && dragStateRef.current?.pointerId !== pointerId) {
+        return
+      }
+
+      dragStateRef.current = null
+      setIsDragging(false)
+      onDragEnd()
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+    function handlePointerUp(event: PointerEvent) {
+      cleanup(event.pointerId)
+    }
+
+    function handlePointerCancel(event: PointerEvent) {
+      cleanup(event.pointerId)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
     }
-  }, [isDragging, onDrag, stopDragging])
+  }, [isDragging, onDrag, onDragEnd])
 
-  useEffect(() => stopDragging, [stopDragging])
+  const onDragPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+        return
+      }
 
-  const handleDragMouseDown = useCallback(
-    (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault()
-
-      dragStateRef.current = {
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-      }
-
-      restoreStylesRef.current = {
-        cursor: document.body.style.cursor,
-        userSelect: document.body.style.userSelect,
-      }
-
-      document.body.style.cursor = 'grabbing'
-      document.body.style.userSelect = 'none'
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      dragStateRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
       setIsDragging(true)
-      onDragStart?.()
+      onDragStart()
     },
     [onDragStart],
   )
 
   return {
     isDragging,
-    onDragMouseDown: handleDragMouseDown,
+    onDragPointerDown,
   }
 }
 

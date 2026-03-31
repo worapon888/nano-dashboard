@@ -1,4 +1,4 @@
-import type { TableWidgetConfig } from '../../../types/widget'
+import type { TableWidgetConfig } from '../../../shared/types/widget'
 import { ordersMock } from './orders.mock'
 
 export const tableWidgetsMock: TableWidgetConfig[] = [

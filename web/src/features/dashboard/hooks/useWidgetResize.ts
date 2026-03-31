@@ -1,110 +1,102 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import type { ResizeDirection } from '../../../types/resize'
-import { resizeCursorByDirection } from '../../../types/resize'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import type { ResizeDirection } from '../../../shared/types/resize'
 
-type ResizeState = {
-  startClientX: number
-  startClientY: number
-  direction: ResizeDirection
+type UseWidgetResizeOptions = {
+  onResizeStart: (direction: ResizeDirection) => void
+  onResize: (direction: ResizeDirection, deltaX: number, deltaY: number) => void
+  onResizeEnd: () => void
 }
 
-type UseWidgetResizeParams = {
-  onResizeStart?: (direction: ResizeDirection) => void
-  onResize: (direction: ResizeDirection, deltaX: number, deltaY: number) => void
-  onResizeEnd?: () => void
+type ResizeState = {
+  pointerId: number
+  direction: ResizeDirection
+  startX: number
+  startY: number
 }
 
 function useWidgetResize({
   onResizeStart,
   onResize,
   onResizeEnd,
-}: UseWidgetResizeParams) {
-  const resizeStateRef = useRef<ResizeState | null>(null)
-  const restoreStylesRef = useRef<{
-    cursor: string
-    userSelect: string
-  } | null>(null)
+}: UseWidgetResizeOptions) {
   const [isResizing, setIsResizing] = useState(false)
-
-  const stopResizing = useCallback(() => {
-    const wasResizing = resizeStateRef.current !== null
-    resizeStateRef.current = null
-    setIsResizing(false)
-
-    if (!restoreStylesRef.current) {
-      return
-    }
-
-    document.body.style.cursor = restoreStylesRef.current.cursor
-    document.body.style.userSelect = restoreStylesRef.current.userSelect
-    restoreStylesRef.current = null
-
-    if (wasResizing) {
-      onResizeEnd?.()
-    }
-  }, [onResizeEnd])
+  const resizeStateRef = useRef<ResizeState | null>(null)
 
   useEffect(() => {
     if (!isResizing) {
       return
     }
 
-    const handleMouseMove = (event: MouseEvent) => {
+    function handlePointerMove(event: PointerEvent) {
       const resizeState = resizeStateRef.current
 
-      if (!resizeState) {
+      if (!resizeState || event.pointerId !== resizeState.pointerId) {
         return
       }
 
       onResize(
         resizeState.direction,
-        event.clientX - resizeState.startClientX,
-        event.clientY - resizeState.startClientY,
+        event.clientX - resizeState.startX,
+        event.clientY - resizeState.startY,
       )
     }
 
-    const handleMouseUp = () => {
-      stopResizing()
+    function cleanup(pointerId?: number) {
+      if (pointerId !== undefined && resizeStateRef.current?.pointerId !== pointerId) {
+        return
+      }
+
+      resizeStateRef.current = null
+      setIsResizing(false)
+      onResizeEnd()
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+    function handlePointerUp(event: PointerEvent) {
+      cleanup(event.pointerId)
+    }
+
+    function handlePointerCancel(event: PointerEvent) {
+      cleanup(event.pointerId)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
     }
-  }, [isResizing, onResize, stopResizing])
+  }, [isResizing, onResize, onResizeEnd])
 
-  useEffect(() => stopResizing, [stopResizing])
+  const onResizeHandlePointerDown = useCallback(
+    (direction: ResizeDirection, event: ReactPointerEvent<HTMLElement>) => {
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+        return
+      }
 
-  const handleResizeMouseDown = useCallback(
-    (direction: ResizeDirection, event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault()
       event.stopPropagation()
-
+      event.currentTarget.setPointerCapture?.(event.pointerId)
       resizeStateRef.current = {
-        startClientX: event.clientX,
-        startClientY: event.clientY,
+        pointerId: event.pointerId,
         direction,
+        startX: event.clientX,
+        startY: event.clientY,
       }
-
-      restoreStylesRef.current = {
-        cursor: document.body.style.cursor,
-        userSelect: document.body.style.userSelect,
-      }
-
-      document.body.style.cursor = resizeCursorByDirection[direction]
-      document.body.style.userSelect = 'none'
       setIsResizing(true)
-      onResizeStart?.(direction)
+      onResizeStart(direction)
     },
     [onResizeStart],
   )
 
   return {
     isResizing,
-    onResizeHandleMouseDown: handleResizeMouseDown,
+    onResizeHandlePointerDown,
   }
 }
 

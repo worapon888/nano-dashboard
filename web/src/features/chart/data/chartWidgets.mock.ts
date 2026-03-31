@@ -2,7 +2,7 @@ import type {
   CartesianChartSeries,
   ChartWidgetConfig,
   PieChartSeries,
-} from '../../../types/widget'
+} from '../../../shared/types/widget'
 
 const createSeries = (series: CartesianChartSeries[]): CartesianChartSeries[] => series
 
@@ -85,6 +85,10 @@ export const chartWidgetsMock: ChartWidgetConfig[] = [
     title: 'BTC Price Trend',
     chartType: 'line',
     categories: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'],
+    presentation: {
+      variant: 'market-trend',
+      rangeLabels: ['Day', 'Week', 'Month'],
+    },
     series: createSeries([
       {
         name: 'BTC/USDT',
@@ -96,6 +100,9 @@ export const chartWidgetsMock: ChartWidgetConfig[] = [
     id: 'volume-profile',
     title: 'Volume Profile',
     chartType: 'bar',
+    presentation: {
+      variant: 'volume-profile',
+    },
     categories: volumeProfileChartData.categories,
     series: createSeries([
       {
@@ -108,6 +115,9 @@ export const chartWidgetsMock: ChartWidgetConfig[] = [
     id: 'daily-pnl',
     title: 'Daily PNL',
     chartType: 'column',
+    presentation: {
+      variant: 'daily-pnl',
+    },
     categories: dailyPnlChartData.categories,
     series: createSeries([
       {
@@ -120,6 +130,9 @@ export const chartWidgetsMock: ChartWidgetConfig[] = [
     id: 'portfolio-breakdown',
     title: 'Portfolio Breakdown',
     chartType: 'pie',
+    presentation: {
+      variant: 'portfolio-breakdown',
+    },
     series: createPieSeries([
       { name: 'BTC', value: 42 },
       { name: 'ETH', value: 28 },

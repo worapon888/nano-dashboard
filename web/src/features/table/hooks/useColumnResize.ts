@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 
 export type ColumnWidths = Record<string, number>
 
@@ -10,6 +10,7 @@ type UseColumnResizeOptions = {
 }
 
 type ResizeState = {
+  pointerId: number
   columnKey: string
   startX: number
   startWidth: number
@@ -39,6 +40,12 @@ function useColumnResize({
   const [resizingColumn, setResizingColumn] = useState<string | null>(null)
   const resizeStateRef = useRef<ResizeState | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+  const frameRef = useRef<number | null>(null)
+  const liveColumnWidthsRef = useRef(columnWidths)
+
+  useEffect(() => {
+    liveColumnWidthsRef.current = columnWidths
+  }, [columnWidths])
 
   // Persist to localStorage whenever widths change
   useEffect(() => {
@@ -53,16 +60,26 @@ function useColumnResize({
   // Cleanup on unmount (handles the case where mouseup fires after unmount)
   useEffect(() => {
     return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
       cleanupRef.current?.()
     }
   }, [])
 
   const startResize = useCallback(
-    (columnKey: string, currentWidth: number, event: ReactMouseEvent) => {
+    (columnKey: string, currentWidth: number, event: ReactPointerEvent) => {
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+        return
+      }
+
       event.preventDefault()
       event.stopPropagation()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
 
       resizeStateRef.current = {
+        pointerId: event.pointerId,
         columnKey,
         startX: event.clientX,
         startWidth: currentWidth,
@@ -75,30 +92,67 @@ function useColumnResize({
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
-      const handleMouseMove = (e: MouseEvent) => {
-        const state = resizeStateRef.current
-        if (!state) return
-        const delta = e.clientX - state.startX
-        const nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
-        setColumnWidths((prev) => {
-          if (prev[state.columnKey] === nextWidth) return prev
-          return { ...prev, [state.columnKey]: nextWidth }
-        })
+      const commitWidths = () => {
+        frameRef.current = null
+        setColumnWidths((prev) =>
+          prev === liveColumnWidthsRef.current ? prev : liveColumnWidthsRef.current,
+        )
       }
 
-      const cleanup = () => {
+      const handlePointerMove = (e: PointerEvent) => {
+        const state = resizeStateRef.current
+        if (!state || e.pointerId !== state.pointerId) return
+        const delta = e.clientX - state.startX
+        const nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
+
+        if (liveColumnWidthsRef.current[state.columnKey] === nextWidth) {
+          return
+        }
+
+        liveColumnWidthsRef.current = {
+          ...liveColumnWidthsRef.current,
+          [state.columnKey]: nextWidth,
+        }
+
+        if (frameRef.current === null) {
+          frameRef.current = window.requestAnimationFrame(commitWidths)
+        }
+      }
+
+      const cleanup = (pointerId?: number) => {
+        if (pointerId !== undefined && resizeStateRef.current?.pointerId !== pointerId) {
+          return
+        }
+
         resizeStateRef.current = null
         setResizingColumn(null)
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current)
+          frameRef.current = null
+        }
+        setColumnWidths((prev) =>
+          prev === liveColumnWidthsRef.current ? prev : liveColumnWidthsRef.current,
+        )
         document.body.style.cursor = savedCursor
         document.body.style.userSelect = savedUserSelect
-        window.removeEventListener('mousemove', handleMouseMove)
-        window.removeEventListener('mouseup', cleanup)
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', handlePointerUp)
+        window.removeEventListener('pointercancel', handlePointerCancel)
         cleanupRef.current = null
       }
 
+      const handlePointerUp = (e: PointerEvent) => {
+        cleanup(e.pointerId)
+      }
+
+      const handlePointerCancel = (e: PointerEvent) => {
+        cleanup(e.pointerId)
+      }
+
       cleanupRef.current = cleanup
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', cleanup)
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', handlePointerUp)
+      window.addEventListener('pointercancel', handlePointerCancel)
     },
     [minWidth],
   )

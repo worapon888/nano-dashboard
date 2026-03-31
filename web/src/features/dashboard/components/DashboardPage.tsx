@@ -7,6 +7,8 @@ import {
 } from 'react'
 
 import DashboardGrid from './DashboardGrid'
+import ConfirmationDialog from '../../../shared/components/ConfirmationDialog'
+import { tradingDashboardDefinition } from '../data/dashboardDefinition'
 
 const authenticatedUser = {
   name: 'Worapon Jintajirakul',
@@ -38,15 +40,18 @@ function NavItem({ label, active = false }: NavItemProps) {
 type ActionButtonProps = {
   label: string
   variant?: 'ghost' | 'primary'
+  onClick?: () => void
 }
 
 function ActionButton({
   label,
   variant = 'ghost',
+  onClick,
 }: ActionButtonProps) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className={[
         'rounded-full border px-3.5 py-2 text-[0.68rem] font-medium uppercase tracking-[0.22em] transition-all',
         variant === 'primary'
@@ -226,7 +231,19 @@ function UserMenu() {
   )
 }
 
-function Header() {
+type HeaderProps = {
+  isLayoutEditing: boolean
+  onToggleLayoutEditing: () => void
+  onResetLayout: () => void
+  onAutoArrange: () => void
+}
+
+function Header({
+  isLayoutEditing,
+  onToggleLayoutEditing,
+  onResetLayout,
+  onAutoArrange,
+}: HeaderProps) {
   return (
     <header className="border-b border-white/8 pb-5">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
@@ -266,7 +283,17 @@ function Header() {
         <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
           <StatusBadge />
           <ActionButton label="Refresh" />
-          <ActionButton label="Edit Layout" variant="primary" />
+          {isLayoutEditing ? (
+            <>
+              <ActionButton label="Auto Arrange" onClick={onAutoArrange} />
+              <ActionButton label="Reset to Default" onClick={onResetLayout} />
+            </>
+          ) : null}
+          <ActionButton
+            label={isLayoutEditing ? 'Done' : 'Edit Layout'}
+            variant="primary"
+            onClick={onToggleLayoutEditing}
+          />
           <UserMenu />
         </div>
       </div>
@@ -300,17 +327,63 @@ function DashboardBackground() {
 }
 
 function DashboardPage() {
+  const [isLayoutEditing, setIsLayoutEditing] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
+  const [resetRequestId, setResetRequestId] = useState(0)
+  const [autoArrangeRequestId, setAutoArrangeRequestId] = useState(0)
+
+  function handleToggleLayoutEditing() {
+    setIsLayoutEditing((current) => !current)
+  }
+
+  function handleResetLayout() {
+    setIsResetDialogOpen(true)
+  }
+
+  function handleCancelResetLayout() {
+    setIsResetDialogOpen(false)
+  }
+
+  function handleConfirmResetLayout() {
+    setResetRequestId((current) => current + 1)
+    setIsResetDialogOpen(false)
+    setIsLayoutEditing(false)
+  }
+
+  function handleAutoArrange() {
+    setAutoArrangeRequestId((current) => current + 1)
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#05070a] text-slate-100">
       <DashboardBackground />
 
-      <div className="relative z-10 flex min-h-screen min-h-0 flex-col px-6 py-8 sm:px-8 lg:px-10">
-        <Header />
+      <div className="relative z-10 flex min-h-screen min-h-0 w-full flex-col px-3 py-4 sm:px-5 sm:py-6 md:px-6 lg:px-10 lg:py-8">
+        <Header
+          isLayoutEditing={isLayoutEditing}
+          onToggleLayoutEditing={handleToggleLayoutEditing}
+          onResetLayout={handleResetLayout}
+          onAutoArrange={handleAutoArrange}
+        />
 
-        <section className="mt-6 min-h-0 flex-1 overflow-hidden rounded-3xl border border-white/8 bg-[rgba(5,7,10,0.88)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-          <DashboardGrid />
+        <section className="mt-4 min-h-0 flex-1 overflow-hidden rounded-[1.5rem] border border-white/8 bg-[rgba(5,7,10,0.88)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:mt-5 sm:rounded-[1.75rem] sm:p-3 lg:mt-6 lg:rounded-3xl lg:p-4">
+          <DashboardGrid
+            definition={tradingDashboardDefinition}
+            resetRequestId={resetRequestId}
+            autoArrangeRequestId={autoArrangeRequestId}
+          />
         </section>
       </div>
+
+      <ConfirmationDialog
+        open={isResetDialogOpen}
+        title="Reset layout?"
+        description="This will restore the default dashboard arrangement and remove your saved custom layout."
+        confirmLabel="Reset to Default"
+        cancelLabel="Cancel"
+        onCancel={handleCancelResetLayout}
+        onConfirm={handleConfirmResetLayout}
+      />
     </main>
   )
 }

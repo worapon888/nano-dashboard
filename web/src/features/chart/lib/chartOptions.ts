@@ -1,5 +1,5 @@
 import type { ApexOptions } from "apexcharts";
-import type { ChartType } from "../../types/widget";
+import type { ChartType, ChartWidgetPresentation } from "../../../shared/types/widget";
 
 function stripUndefined<T extends object>(obj: T): T {
   return Object.fromEntries(
@@ -17,7 +17,7 @@ function stripUndefined<T extends object>(obj: T): T {
 type BuildChartOptionsParams = {
   chartId: string;
   chartType: ChartType;
-  title: string;
+  presentation?: ChartWidgetPresentation;
   categories?: string[];
   labels?: string[];
   values?: number[];
@@ -27,11 +27,9 @@ const axisChartTypes: ChartType[] = ["line", "bar", "column"];
 
 export function getApexChartType(
   chartType: ChartType,
-  title?: string,
+  presentation?: ChartWidgetPresentation,
 ): "area" | "line" | "bar" | "pie" {
-  const normalizedTitle = title?.trim().toLowerCase();
-
-  if (chartType === "line" && normalizedTitle === "btc price trend") {
+  if (chartType === "line" && presentation?.variant === "market-trend") {
     return "area";
   }
 
@@ -45,21 +43,20 @@ export function getApexChartType(
 export function buildChartOptions({
   chartId,
   chartType,
-  title,
+  presentation,
   categories,
   labels,
   values,
 }: BuildChartOptionsParams): ApexOptions {
-  const normalizedTitle = title.trim().toLowerCase();
+  const variant = presentation?.variant ?? "default";
   const isBarChart = chartType === "bar";
   const isColumnChart = chartType === "column";
   const isLineChart = chartType === "line";
-  const isBtcPriceTrend = isLineChart && normalizedTitle === "btc price trend";
-  const isVolumeProfile = isBarChart && normalizedTitle === "volume profile";
-  const isDailyPnlColumn = isColumnChart && normalizedTitle === "daily pnl";
-  const isPortfolioBreakdown =
-    chartType === "pie" && normalizedTitle === "portfolio breakdown";
-  const apexChartType = getApexChartType(chartType, title);
+  const isBtcPriceTrend = variant === "market-trend";
+  const isVolumeProfile = variant === "volume-profile";
+  const isDailyPnlColumn = variant === "daily-pnl";
+  const isPortfolioBreakdown = variant === "portfolio-breakdown";
+  const apexChartType = getApexChartType(chartType, presentation);
   const isCartesianChart = axisChartTypes.includes(chartType);
   const minValue =
     values && values.length > 0 ? Math.min(...values) : undefined;
@@ -658,9 +655,7 @@ export function buildChartOptions({
         barHeight: isVolumeProfile ? "66%" : isBarChart ? "82%" : undefined,
         distributed: isDailyPnlColumn || isVolumeProfile,
         colors:
-          (isColumnChart || isVolumeProfile) &&
-          !isDailyPnlColumn &&
-          !isVolumeProfile
+          isColumnChart && !isDailyPnlColumn
             ? {
                 ranges: [
                   {
