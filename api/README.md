@@ -168,6 +168,7 @@ WebSocket delivery is covered by integration tests, verifying:
 - fan-out to multiple connected clients
 - exactly-once emission per mutation
 - payload safety (no sensitive fields)
+- event delivery is non-blocking and does not affect HTTP response latency
 
 Connect: `ws://localhost:PORT/ws`
 
@@ -303,18 +304,19 @@ Paginated responses include a `meta` field:
 ```json
 {
   "userCount": 12,
-  "topMovers": [], // fixed tracked-symbol list for dashboard display, not real-time ranked movers
+  "topMovers": [], // fixed tracked-symbol snapshot for dashboard display, not exchange-ranked movers
   "health": { "db": "up", "redis": "up", "wsConnections": 2 },
   "warnings": [],
   "generatedAt": "2026-03-30T12:00:00.000Z"
 }
 ```
 
-`topMovers` is a legacy response field name. In the current implementation it contains cached data for a fixed tracked symbol list, not an exchange-ranked movers query. It is empty until ticker data has been fetched and cached for at least one symbol.
+`topMovers` is a legacy response field name. In the current implementation it is a fixed tracked-symbol snapshot for dashboard display, not exchange-ranked movers. It is empty until ticker data has been fetched and cached for at least one symbol.
 
 ## Test Coverage Notes
 
 - `npm test` covers the market-data cache/lock flow with unit tests.
+- The system is designed to be testable without relying on external Binance availability by isolating the `BinanceService` and mocking HTTP responses in unit tests.
 - `npm run test:e2e` covers auth, users CRUD, dashboard summary, ticker HTTP behavior, and WebSocket fan-out for `user.created` and `user.updated`.
 - The suite verifies that two real WS clients can connect and receive exactly one safe event per successful mutation.
 - Ticker WebSocket fan-out is implemented, but it is not covered by a dedicated WebSocket integration test yet.
