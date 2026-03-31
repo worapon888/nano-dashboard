@@ -47,7 +47,7 @@ function getApexSeries(
   chartType: ChartType,
   series: ChartSeries[],
 ): {
-  apexType: "line" | "bar" | "pie";
+  apexType: "area" | "line" | "bar" | "pie";
   apexSeries: number[] | CartesianChartSeries[];
 } | null {
   if (chartType === "pie") {
@@ -67,7 +67,7 @@ function getApexSeries(
 
   if (chartType === "line") {
     return {
-      apexType: "line",
+      apexType: "area",
       apexSeries: series.map((item) => ({
         name: item.name,
         data: item.data,
@@ -110,7 +110,16 @@ function ChartWidget({
   onMaximizeToggle,
 }: ChartWidgetProps) {
   const { ref, width, height } = useResizeObserver<HTMLDivElement>();
+  const normalizedTitle = title.trim().toLowerCase();
   const isStockStyleLineChart = chartType === "line";
+  const isBtcPriceTrendWidget =
+    chartType === "line" && normalizedTitle === "btc price trend";
+  const isDailyPnlWidget =
+    chartType === "column" && normalizedTitle === "daily pnl";
+  const isVolumeProfileWidget =
+    chartType === "bar" && normalizedTitle === "volume profile";
+  const isPortfolioBreakdownWidget =
+    chartType === "pie" && normalizedTitle === "portfolio breakdown";
   const stopHeaderMouseEvent = (event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -145,9 +154,15 @@ function ChartWidget({
     ? series.map((item) => item.name)
     : undefined;
   const incomingNormalizedChart = getApexSeries(chartType, series);
-  const lineSeries =
-    chartType === "line" && incomingNormalizedChart?.apexType === "line"
+  const primaryCartesianSeries =
+    incomingNormalizedChart &&
+    incomingNormalizedChart.apexType !== "pie" &&
+    incomingNormalizedChart.apexSeries.length > 0
       ? (incomingNormalizedChart.apexSeries[0] as CartesianChartSeries)
+      : null;
+  const lineSeries =
+    chartType === "line" && incomingNormalizedChart?.apexType === "area"
+      ? primaryCartesianSeries
       : null;
   const incomingChartOptions = buildChartOptions({
     chartId,
@@ -155,7 +170,14 @@ function ChartWidget({
     title,
     categories,
     labels: pieLabels,
-    values: lineSeries?.data,
+    values:
+      isStockStyleLineChart ||
+      isDailyPnlWidget ||
+      isVolumeProfileWidget ||
+      isPortfolioBreakdownWidget
+        ? primaryCartesianSeries?.data
+          ?? (isPieSeries(series) ? series.map((item) => item.value) : undefined)
+        : undefined,
   });
   const latestLineValue =
     lineSeries && lineSeries.data.length > 0
@@ -171,13 +193,33 @@ function ChartWidget({
     lineDelta !== null && firstLineValue
       ? (lineDelta / firstLineValue) * 100
       : null;
+  const isPositiveLineTrend = lineDelta !== null ? lineDelta >= 0 : true;
+  const lineTrendColorClass = isPositiveLineTrend
+    ? "text-[#22C55E]"
+    : "text-[#ff7b7b]";
+  const formattedLineChange =
+    lineDelta !== null
+      ? `${lineDelta > 0 ? "+" : ""}${Math.round(lineDelta).toLocaleString()}`
+      : "--";
+  const formattedLineChangePercent =
+    lineDeltaPercent !== null
+      ? `${lineDeltaPercent > 0 ? "+" : ""}${lineDeltaPercent.toFixed(2)}%`
+      : "--";
+  const dailyPnlValues = isDailyPnlWidget ? primaryCartesianSeries?.data ?? [] : [];
+  const dailyPnlTotal = dailyPnlValues.reduce((sum, value) => sum + value, 0);
+  const positivePnlDays = dailyPnlValues.filter((value) => value > 0).length;
+  const negativePnlDays = dailyPnlValues.filter((value) => value < 0).length;
+  const strongestPnl = dailyPnlValues.length > 0 ? Math.max(...dailyPnlValues) : null;
+  const weakestPnl = dailyPnlValues.length > 0 ? Math.min(...dailyPnlValues) : null;
   const chartHeight = Math.max(height, 220);
   const chartWidth = Math.max(width, 0);
   const isReady = chartWidth > 0 && chartHeight > 0;
   const chartKey = `${chartType}-${width}-${height}`;
+  const dailyPnlAverage =
+    dailyPnlValues.length > 0 ? dailyPnlTotal / dailyPnlValues.length : null;
 
   const testChart =
-    chartType === "bar"
+    chartType === "bar" && !isVolumeProfileWidget
       ? {
           apexType: "bar" as const,
           apexSeries: [{ name: "Test", data: [10, 20, 30, 40, 50] }],
@@ -204,34 +246,7 @@ function ChartWidget({
             },
           },
         }
-      : chartType === "column"
-        ? {
-            apexType: "bar" as const,
-            apexSeries: [{ name: "Test", data: [5, -3, 8, 2, -1] }],
-            chartOptions: {
-              chart: {
-                id: chartId,
-                type: "bar" as const,
-                background: "transparent",
-              },
-              theme: {
-                mode: "dark" as const,
-              },
-              colors: ["#22c55e"],
-              tooltip: {
-                theme: "dark" as const,
-              },
-              xaxis: {
-                categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-              },
-              plotOptions: {
-                bar: {
-                  horizontal: false,
-                },
-              },
-            },
-          }
-        : chartType === "pie"
+        : chartType === "pie" && !isPortfolioBreakdownWidget
           ? {
               apexType: "pie" as const,
               apexSeries: [42, 28, 14, 10, 6],
@@ -253,12 +268,22 @@ function ChartWidget({
             }
           : null;
 
-  const normalizedChart = testChart ?? incomingNormalizedChart;
-  const chartOptions = testChart?.chartOptions ?? incomingChartOptions;
+  const normalizedChart =
+    chartType === "column" || isVolumeProfileWidget
+      ? incomingNormalizedChart
+      : isPortfolioBreakdownWidget
+        ? incomingNormalizedChart
+        : testChart ?? incomingNormalizedChart;
+  const chartOptions =
+    chartType === "column" || isVolumeProfileWidget
+      ? incomingChartOptions
+      : isPortfolioBreakdownWidget
+        ? incomingChartOptions
+        : testChart?.chartOptions ?? incomingChartOptions;
 
   if (
     !normalizedChart ||
-    normalizedChart.apexType !== getApexChartType(chartType)
+    normalizedChart.apexType !== getApexChartType(chartType, title)
   ) {
     return (
       <WidgetShell title={title}>
@@ -281,18 +306,30 @@ function ChartWidget({
     >
       {!isMinimized ? (
         <div
-          className={`h-full min-h-[220px] min-w-0 w-full overflow-hidden ${isStockStyleLineChart ? "bg-[#0a0a0a] px-3 py-3" : "px-1 py-1"}`}
+          className={`relative flex h-full min-h-[220px] min-w-0 w-full flex-col overflow-hidden ${
+            isStockStyleLineChart
+              ? isBtcPriceTrendWidget
+                ? "rounded-[1.35rem] bg-[#0a0a0a] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_50px_rgba(0,0,0,0.35)]"
+                : "bg-[#0a0a0a] px-3 py-3"
+              : isDailyPnlWidget
+                ? "rounded-[1.35rem] bg-[#0a0a0a] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_50px_rgba(0,0,0,0.35)]"
+                : isVolumeProfileWidget
+                  ? "rounded-[1.2rem] bg-[#0a0a0a] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_20px_40px_rgba(0,0,0,0.3)]"
+                : isPortfolioBreakdownWidget
+                  ? "rounded-[1.25rem] bg-[#0a0a0a] px-2.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_22px_44px_rgba(0,0,0,0.32)]"
+                  : "px-1 py-1"
+          }`}
         >
           {isStockStyleLineChart ? (
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="inline-flex rounded-xl border border-white/6 bg-white/[0.03] p-1">
-                {["Week", "Month", "Max"].map((rangeLabel, index) => (
+            <div className="relative z-[1] mb-1 flex items-center justify-between gap-4 px-0.5">
+              <div className="inline-flex rounded-lg border border-white/6 bg-white/[0.03] p-0.5 self-start">
+                {["Day", "Week", "Month"].map((rangeLabel, index) => (
                   <button
                     key={rangeLabel}
                     type="button"
                     onMouseDown={stopHeaderMouseEvent}
-                    className={`rounded-lg px-5 py-2 text-xs font-medium transition ${
-                      index === 2
+                    className={`rounded-md px-3.5 py-1.5 text-[11px] font-medium transition ${
+                      index === 0
                         ? "bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                         : "text-slate-400 hover:text-slate-200"
                     }`}
@@ -301,19 +338,59 @@ function ChartWidget({
                   </button>
                 ))}
               </div>
-              <div className="text-right">
-                <div className="text-[0.72rem] uppercase tracking-[0.24em] text-slate-500">
+              <div className="flex min-w-[112px] flex-col items-end justify-center text-right">
+                <div className="text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
                   Live Price
                 </div>
-                <div className="mt-1 text-lg font-semibold text-[#5ef2c5]">
-                  {latestLineValue?.toLocaleString() ?? "--"}
+                <div className="mt-0.5 text-[1.15rem] font-semibold leading-none text-[#E5E7EB]">
+                  {latestLineValue !== null
+                    ? `$${Math.round(latestLineValue).toLocaleString()}`
+                    : "--"}
                 </div>
+                <div
+                  className={`mt-1 text-[0.74rem] font-medium leading-none ${lineTrendColorClass}`}
+                >
+                  {formattedLineChange} ({formattedLineChangePercent})
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {isDailyPnlWidget ? (
+            <div className="mb-1.5 flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[0.64rem] uppercase tracking-[0.24em] text-slate-500">
+                  Weekly Net
+                </div>
+                <div
+                  className={`mt-1 text-[0.95rem] font-medium ${
+                    dailyPnlTotal >= 0 ? "text-[#22C55E]" : "text-[#f0a2a2]"
+                  }`}
+                >
+                  {`${dailyPnlTotal >= 0 ? "+" : ""}${dailyPnlTotal.toLocaleString()}`}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">
+                <span>Win</span>
+                <span className="text-sm font-semibold tracking-normal text-[#22C55E]">
+                  {positivePnlDays}
+                </span>
+                <span className="text-white/20">|</span>
+                <span>Loss</span>
+                <span className="text-sm font-semibold tracking-normal text-[#ff5c5c]">
+                  {negativePnlDays}
+                </span>
               </div>
             </div>
           ) : null}
           <div
             ref={ref}
-            className={`${isStockStyleLineChart ? "h-[calc(100%-6.75rem)] min-h-[240px]" : "h-full"} min-w-0 w-full overflow-hidden`}
+            className={`${
+              isStockStyleLineChart || isDailyPnlWidget || isVolumeProfileWidget
+                ? "min-h-[250px] flex-1"
+                : isPortfolioBreakdownWidget
+                  ? "min-h-[250px] flex-1"
+                  : "h-full"
+            } relative z-[1] min-w-0 w-full overflow-hidden`}
           >
             {isReady ? (
               <ReactApexChart
@@ -326,32 +403,78 @@ function ChartWidget({
               />
             ) : null}
           </div>
-          {isStockStyleLineChart ? (
-            <div className="mt-5 flex items-end justify-between gap-4 border-t border-white/6 pt-3">
+          {isDailyPnlWidget ? (
+            <div className="mt-3 flex items-end justify-between gap-4 border-t border-white/6 pt-2">
               <div>
-                <div className="text-[0.72rem] uppercase tracking-[0.22em] text-slate-500">
-                  Total Change
+                <div className="text-[0.64rem] uppercase tracking-[0.22em] text-slate-500">
+                  Best
                 </div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold text-slate-100">
-                    {latestLineValue?.toLocaleString() ?? "--"}
-                  </span>
-                  <span className="text-base font-medium text-[#5ef2c5]">
-                    {lineDelta !== null
-                      ? `${lineDelta > 0 ? "+" : ""}${lineDelta.toFixed(0)}`
-                      : "--"}
-                  </span>
+                <div className="mt-1 text-sm font-semibold text-[#58ffd6]">
+                  {strongestPnl !== null
+                    ? `${strongestPnl >= 0 ? "+" : ""}${strongestPnl.toLocaleString()}`
+                    : "--"}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-[0.64rem] uppercase tracking-[0.22em] text-slate-500">
+                  Avg
+                </div>
+                <div className="mt-1 text-sm font-semibold text-slate-200">
+                  {dailyPnlAverage !== null
+                    ? `${dailyPnlAverage >= 0 ? "+" : ""}${dailyPnlAverage.toFixed(0)}`
+                    : "--"}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[0.72rem] uppercase tracking-[0.22em] text-slate-500">
-                  Performance
+                <div className="text-[0.64rem] uppercase tracking-[0.22em] text-slate-500">
+                  Worst
                 </div>
-                <div className="mt-1 text-3xl font-semibold text-[#5ef2c5]">
-                  {lineDeltaPercent !== null
-                    ? `${lineDeltaPercent > 0 ? "+" : ""}${lineDeltaPercent.toFixed(1)}%`
+                <div className="mt-1 text-sm font-semibold text-[#ff5c5c]">
+                  {weakestPnl !== null
+                    ? `${weakestPnl >= 0 ? "+" : ""}${weakestPnl.toLocaleString()}`
                     : "--"}
                 </div>
+              </div>
+            </div>
+          ) : null}
+          {isStockStyleLineChart ? (
+            <div className="relative z-[1] mt-3 flex items-end justify-between gap-3 border-t border-white/6 pt-2.5">
+              <div>
+                {isBtcPriceTrendWidget ? (
+                  <div className="text-[0.64rem] uppercase tracking-[0.2em] text-slate-500">
+                    Intraday Trend
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[0.72rem] uppercase tracking-[0.22em] text-slate-500">
+                      Total Change
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-3xl font-semibold text-slate-100">
+                        {latestLineValue?.toLocaleString() ?? "--"}
+                      </span>
+                      <span className={`text-base font-medium ${lineTrendColorClass}`}>
+                        {formattedLineChange}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="text-right">
+                <div className="text-[0.64rem] uppercase tracking-[0.2em] text-slate-500">
+                  {isBtcPriceTrendWidget ? "24H Change" : "Performance"}
+                </div>
+                {isBtcPriceTrendWidget ? (
+                  <div className={`mt-1 text-[0.92rem] font-semibold leading-none ${lineTrendColorClass}`}>
+                    {formattedLineChange} ({formattedLineChangePercent})
+                  </div>
+                ) : (
+                  <div className={`mt-1 text-3xl font-semibold ${lineTrendColorClass}`}>
+                    {lineDeltaPercent !== null
+                      ? `${lineDeltaPercent > 0 ? "+" : ""}${lineDeltaPercent.toFixed(1)}%`
+                      : "--"}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}

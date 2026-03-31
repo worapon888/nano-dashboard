@@ -10,7 +10,7 @@ import useWidgetResize from '../hooks/useWidgetResize'
 
 const GRID_COLUMNS = 12
 const GRID_ROW_HEIGHT = 56
-const GRID_MARGIN = 16
+const GRID_MARGIN = 24
 const PANEL_MIN_WIDTH = 320
 const PANEL_MIN_HEIGHT = 260
 const CANVAS_BOTTOM_PADDING = 24
@@ -375,23 +375,17 @@ function applyMinimizedDockLayout(panels: PanelRect[], canvasWidth: number) {
   }
 
   const nextPanels = panels.map((panel) => ({ ...panel }))
-  const normalPanels = nextPanels.filter((panel) => panel.windowState !== 'minimized')
   const minimizedPanels = nextPanels.filter((panel) => panel.windowState === 'minimized')
-  const dockTop =
-    (normalPanels.length > 0
-      ? Math.max(...normalPanels.map((panel) => panel.y + panel.height))
-      : 0) + GRID_MARGIN
 
   let cursorX = 0
-  let cursorY = dockTop
-  let rowHeight = PANEL_MINIMIZED_HEIGHT
+  let cursorY = 0
 
   for (const panel of minimizedPanels) {
     const dockWidth = Math.min(getMinimizedPanelWidth(panel), canvasWidth)
 
     if (cursorX > 0 && cursorX + dockWidth > canvasWidth) {
       cursorX = 0
-      cursorY += rowHeight + GRID_MARGIN
+      cursorY += PANEL_MINIMIZED_HEIGHT + GRID_MARGIN
     }
 
     panel.x = cursorX
@@ -529,7 +523,7 @@ function DashboardPanelItem({
   return (
     <div
       ref={panelRef}
-      className="absolute will-change-[left,top,width,height,transform,opacity]"
+      className="pointer-events-auto absolute will-change-[left,top,width,height,transform,opacity]"
       style={{
         left: panel.x,
         top: panel.y,
@@ -574,6 +568,18 @@ function DashboardGrid() {
   const [animatedPanelIds, setAnimatedPanelIds] = useState<string[]>([])
   const maximizedPanelId =
     panels.find((panel) => panel.windowState === 'maximized')?.id ?? null
+  const visiblePanels = useMemo(
+    () => panels.filter((panel) => !maximizedPanelId || panel.id === maximizedPanelId),
+    [maximizedPanelId, panels],
+  )
+  const canvasPanels = useMemo(
+    () => visiblePanels.filter((panel) => panel.windowState !== 'minimized'),
+    [visiblePanels],
+  )
+  const dockPanels = useMemo(
+    () => visiblePanels.filter((panel) => panel.windowState === 'minimized'),
+    [visiblePanels],
+  )
 
   const animatePanels = useCallback((panelIds: string[]) => {
     setAnimatedPanelIds(panelIds)
@@ -871,58 +877,104 @@ function DashboardGrid() {
   )
 
   const canvasHeight = useMemo(() => {
-    const maximizedPanel = panels.find((panel) => panel.windowState === 'maximized')
+    const maximizedPanel = canvasPanels.find((panel) => panel.windowState === 'maximized')
 
     if (maximizedPanel) {
       return maximizedPanel.height + CANVAS_BOTTOM_PADDING
     }
 
-    if (panels.length === 0) {
+    if (canvasPanels.length === 0) {
       return PANEL_MIN_HEIGHT
     }
 
-    const bottomEdge = Math.max(...panels.map((panel) => panel.y + panel.height))
+    const bottomEdge = Math.max(...canvasPanels.map((panel) => panel.y + panel.height))
     return bottomEdge + CANVAS_BOTTOM_PADDING
-  }, [panels])
+  }, [canvasPanels])
+
+  const dockHeight = useMemo(() => {
+    if (dockPanels.length === 0) {
+      return 0
+    }
+
+    return Math.max(...dockPanels.map((panel) => panel.y + panel.height))
+  }, [dockPanels])
 
   return (
-    <div
-      ref={canvasRef}
-      className="relative min-h-[720px] w-full"
-      style={{ height: canvasHeight }}
-    >
-      {panels
-        .filter((panel) => !maximizedPanelId || panel.id === maximizedPanelId)
-        .map((panel) => {
-        const widget = chartWidgetsById.get(panel.id)
+    <div ref={canvasRef} className="relative h-full min-h-0 w-full">
+      <div className="h-full min-h-0 overflow-auto">
+        <div
+          className="relative min-h-[720px] w-full"
+          style={{ height: canvasHeight }}
+        >
+          {canvasPanels.map((panel) => {
+            const widget = chartWidgetsById.get(panel.id)
 
-        if (!widget) {
-          return null
-        }
+            if (!widget) {
+              return null
+            }
 
-        return (
-          <DashboardPanelItem
-            key={panel.id}
-            panel={panel}
-            widget={widget}
-            canvasWidth={canvasWidth}
-            isDragging={activeDragPanelId === panel.id}
-            isResizing={activeResizePanelId === panel.id}
-            isAnimating={animatedPanelIds.includes(panel.id)}
-            canDrag={panel.windowState !== 'maximized'}
-            canResize={panel.windowState === 'normal'}
-            onDragStart={handleDragStart}
-            onDrag={handleDrag}
-            onDragEnd={handleDragEnd}
-            onResizeStart={handleResizeStart}
-            onResize={handleResize}
-            onResizeEnd={handleResizeEnd}
-            onResetToDefault={handleResetToDefault}
-            onMinimizeToggle={handleMinimizeToggle}
-            onMaximizeToggle={handleMaximizeToggle}
-          />
-        )
-      })}
+            return (
+              <DashboardPanelItem
+                key={panel.id}
+                panel={panel}
+                widget={widget}
+                canvasWidth={canvasWidth}
+                isDragging={activeDragPanelId === panel.id}
+                isResizing={activeResizePanelId === panel.id}
+                isAnimating={animatedPanelIds.includes(panel.id)}
+                canDrag={panel.windowState === 'normal'}
+                canResize={panel.windowState === 'normal'}
+                onDragStart={handleDragStart}
+                onDrag={handleDrag}
+                onDragEnd={handleDragEnd}
+                onResizeStart={handleResizeStart}
+                onResize={handleResize}
+                onResizeEnd={handleResizeEnd}
+                onResetToDefault={handleResetToDefault}
+                onMinimizeToggle={handleMinimizeToggle}
+                onMaximizeToggle={handleMaximizeToggle}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {dockPanels.length > 0 ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
+          <div className="relative w-full" style={{ height: dockHeight }}>
+            {dockPanels.map((panel) => {
+              const widget = chartWidgetsById.get(panel.id)
+
+              if (!widget) {
+                return null
+              }
+
+              return (
+                <DashboardPanelItem
+                  key={panel.id}
+                  panel={panel}
+                  widget={widget}
+                  canvasWidth={canvasWidth}
+                  isDragging={false}
+                  isResizing={false}
+                  isAnimating={animatedPanelIds.includes(panel.id)}
+                  canDrag={false}
+                  canResize={false}
+                  onDragStart={handleDragStart}
+                  onDrag={handleDrag}
+                  onDragEnd={handleDragEnd}
+                  onResizeStart={handleResizeStart}
+                  onResize={handleResize}
+                  onResizeEnd={handleResizeEnd}
+                  onResetToDefault={handleResetToDefault}
+                  onMinimizeToggle={handleMinimizeToggle}
+                  onMaximizeToggle={handleMaximizeToggle}
+                />
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
