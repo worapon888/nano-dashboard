@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { gsap } from 'gsap'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useResizeObserver from '../../../hooks/useResizeObserver'
 import ChartWidget from '../../../widgets/chart/ChartWidget'
-import type { ChartWidgetConfig } from '../../../types/widget'
+import TradingTable from '../../../widgets/table/TradingTable'
+import type { AnyWidgetConfig, ChartWidgetConfig, TableWidgetConfig } from '../../../types/widget'
+import type { ResizeDirection } from '../../../types/resize'
 import { chartWidgetsMock } from '../mocks/chartWidgets.mock'
+import { tableWidgetsMock } from '../mocks/tableWidgets.mock'
 import { dashboardPanelsMock } from '../mocks/dashboardPanels.mock'
 import useWidgetDrag from '../hooks/useWidgetDrag'
 import useWidgetResize from '../hooks/useWidgetResize'
@@ -44,9 +46,13 @@ type PanelSnapshot = {
   windowState: PanelWindowState
 }
 
+function isTableWidget(widget: AnyWidgetConfig): widget is TableWidgetConfig {
+  return (widget as TableWidgetConfig).widgetType === 'table'
+}
+
 type DashboardPanelItemProps = {
   panel: PanelRect
-  widget: ChartWidgetConfig
+  widget: AnyWidgetConfig
   canvasWidth: number
   isDragging: boolean
   isResizing: boolean
@@ -56,8 +62,8 @@ type DashboardPanelItemProps = {
   onDragStart: (panelId: string) => void
   onDrag: (panelId: string, deltaX: number, deltaY: number) => void
   onDragEnd: () => void
-  onResizeStart: (panelId: string) => void
-  onResize: (panelId: string, deltaX: number, deltaY: number) => void
+  onResizeStart: (panelId: string, direction: ResizeDirection) => void
+  onResize: (panelId: string, direction: ResizeDirection, deltaX: number, deltaY: number) => void
   onResizeEnd: () => void
   onResetToDefault: (panelId: string) => void
   onMinimizeToggle: (panelId: string) => void
@@ -194,16 +200,54 @@ function resolveActiveDragCollision(
   options.sort((left, right) => left.distance - right.distance)[0]?.apply()
 }
 
-function resolveActiveResizeCollision(activePanel: PanelRect, targetPanel: PanelRect) {
-  const maxWidthBeforeTarget = targetPanel.x - activePanel.x
-  const maxHeightBeforeTarget = targetPanel.y - activePanel.y
+function resolveActiveResizeCollision(
+  activePanel: PanelRect,
+  targetPanel: PanelRect,
+  direction: ResizeDirection,
+) {
+  const activeRight = activePanel.x + activePanel.width
+  const activeBottom = activePanel.y + activePanel.height
+  const targetRight = targetPanel.x + targetPanel.width
+  const targetBottom = targetPanel.y + targetPanel.height
+  const resizeFromLeft = direction === 'left' || direction === 'topLeft' || direction === 'bottomLeft'
+  const resizeFromTop = direction === 'top' || direction === 'topLeft' || direction === 'topRight'
+  const resizeFromRight = direction === 'right' || direction === 'topRight' || direction === 'bottomRight'
+  const resizeFromBottom = direction === 'bottom' || direction === 'bottomLeft' || direction === 'bottomRight'
 
-  if (maxWidthBeforeTarget >= activePanel.minWidth) {
-    activePanel.width = Math.min(activePanel.width, maxWidthBeforeTarget)
+  if (resizeFromRight) {
+    const maxWidthBeforeTarget = targetPanel.x - activePanel.x
+
+    if (maxWidthBeforeTarget >= activePanel.minWidth) {
+      activePanel.width = Math.min(activePanel.width, maxWidthBeforeTarget)
+    }
   }
 
-  if (maxHeightBeforeTarget >= activePanel.minHeight) {
-    activePanel.height = Math.min(activePanel.height, maxHeightBeforeTarget)
+  if (resizeFromBottom) {
+    const maxHeightBeforeTarget = targetPanel.y - activePanel.y
+
+    if (maxHeightBeforeTarget >= activePanel.minHeight) {
+      activePanel.height = Math.min(activePanel.height, maxHeightBeforeTarget)
+    }
+  }
+
+  if (resizeFromLeft) {
+    const nextX = Math.max(activePanel.x, targetRight)
+    const nextWidth = activeRight - nextX
+
+    if (nextWidth >= activePanel.minWidth) {
+      activePanel.x = nextX
+      activePanel.width = nextWidth
+    }
+  }
+
+  if (resizeFromTop) {
+    const nextY = Math.max(activePanel.y, targetBottom)
+    const nextHeight = activeBottom - nextY
+
+    if (nextHeight >= activePanel.minHeight) {
+      activePanel.y = nextY
+      activePanel.height = nextHeight
+    }
   }
 }
 
@@ -257,8 +301,6 @@ function resolveCollisions(
 
       if (mode === 'drag') {
         resolveActiveDragCollision(activePanel, panel, canvasWidth)
-      } else {
-        resolveActiveResizeCollision(activePanel, panel)
       }
 
       resolvedAnyCollision = true
@@ -276,6 +318,7 @@ function resolveResizePanels(
   panels: PanelRect[],
   activePanelId: string,
   canvasWidth: number,
+  direction: ResizeDirection,
 ) {
   const nextPanels = panels.map((panel) => ({ ...panel }))
   const activePanel = nextPanels.find((panel) => panel.id === activePanelId)
@@ -327,11 +370,15 @@ function resolveResizePanels(
         continue
       }
 
+      const previousX = activePanel.x
+      const previousY = activePanel.y
       const previousWidth = activePanel.width
       const previousHeight = activePanel.height
-      resolveActiveResizeCollision(activePanel, panel)
+      resolveActiveResizeCollision(activePanel, panel, direction)
 
       if (
+        activePanel.x !== previousX ||
+        activePanel.y !== previousY ||
         activePanel.width !== previousWidth ||
         activePanel.height !== previousHeight
       ) {
@@ -440,89 +487,32 @@ function DashboardPanelItem({
   onMinimizeToggle,
   onMaximizeToggle,
 }: DashboardPanelItemProps) {
-  const panelRef = useRef<HTMLDivElement | null>(null)
-  const previousPanelRef = useRef(panel)
   const { isDragging: dragActive, onDragMouseDown } = useWidgetDrag({
     onDragStart: () => onDragStart(panel.id),
     onDrag: (deltaX, deltaY) => onDrag(panel.id, deltaX, deltaY),
     onDragEnd,
   })
   const { isResizing: resizeActive, onResizeHandleMouseDown } = useWidgetResize({
-    onResizeStart: () => onResizeStart(panel.id),
-    onResize: (deltaX, deltaY) => onResize(panel.id, deltaX, deltaY),
+    onResizeStart: (direction) => onResizeStart(panel.id, direction),
+    onResize: (direction, deltaX, deltaY) => onResize(panel.id, direction, deltaX, deltaY),
     onResizeEnd,
   })
 
-  useLayoutEffect(() => {
-    const element = panelRef.current
-
-    if (!element) {
-      previousPanelRef.current = panel
-      return
-    }
-
-    const previousPanel = previousPanelRef.current
-    const nextOpacity = panel.windowState === 'minimized' ? 0.96 : 1
-    const nextScale = panel.windowState === 'minimized' ? 0.985 : 1
-
-    gsap.killTweensOf(element)
-
-    if (isDragging || isResizing) {
-      gsap.set(element, {
-        left: panel.x,
-        top: panel.y,
-        width: panel.width,
-        height: panel.height,
-        opacity: nextOpacity,
-        scale: nextScale,
-      })
-      previousPanelRef.current = panel
-      return
-    }
-
-    if (isAnimating) {
-      gsap.fromTo(
-        element,
-        {
-          left: previousPanel.x,
-          top: previousPanel.y,
-          width: previousPanel.width,
-          height: previousPanel.height,
-          opacity:
-            previousPanel.windowState === 'minimized'
-              ? 0.96
-              : 1,
-          scale: previousPanel.windowState === 'minimized' ? 0.985 : 1,
-        },
-        {
-          duration: 0.42,
-          ease: 'power3.out',
-          left: panel.x,
-          top: panel.y,
-          width: panel.width,
-          height: panel.height,
-          opacity: nextOpacity,
-          scale: nextScale,
-          overwrite: 'auto',
-        },
-      )
-    } else {
-      gsap.set(element, {
-        left: panel.x,
-        top: panel.y,
-        width: panel.width,
-        height: panel.height,
-        opacity: nextOpacity,
-        scale: nextScale,
-      })
-    }
-
-    previousPanelRef.current = panel
-  }, [isAnimating, isDragging, isResizing, panel])
+  const sharedWidgetProps = {
+    title: widget.title,
+    isMinimized: panel.windowState === 'minimized',
+    isMaximized: panel.windowState === 'maximized',
+    isDragging: isDragging || dragActive,
+    isResizing: isResizing || resizeActive,
+    onDragMouseDown: canDrag ? onDragMouseDown : undefined,
+    onResizeHandleMouseDown: canResize ? onResizeHandleMouseDown : undefined,
+    onResetToDefault: () => onResetToDefault(panel.id),
+    onMinimizeToggle: () => onMinimizeToggle(panel.id),
+    onMaximizeToggle: () => onMaximizeToggle(panel.id),
+  }
 
   return (
     <div
-      ref={panelRef}
       className="pointer-events-auto absolute will-change-[left,top,width,height,transform,opacity]"
       style={{
         left: panel.x,
@@ -532,23 +522,24 @@ function DashboardPanelItem({
         maxWidth: canvasWidth,
         opacity: panel.windowState === 'minimized' ? 0.96 : 1,
         transform: `scale(${panel.windowState === 'minimized' ? 0.985 : 1})`,
+        transition:
+          isDragging || isResizing
+            ? 'none'
+            : isAnimating
+              ? 'left 420ms cubic-bezier(0.22, 1, 0.36, 1), top 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), height 420ms cubic-bezier(0.22, 1, 0.36, 1), transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms cubic-bezier(0.22, 1, 0.36, 1)'
+              : 'none',
       }}
     >
-      <ChartWidget
-        title={widget.title}
-        chartType={widget.chartType}
-        series={widget.series}
-        categories={widget.categories}
-        isMinimized={panel.windowState === 'minimized'}
-        isMaximized={panel.windowState === 'maximized'}
-        isDragging={isDragging || dragActive}
-        isResizing={isResizing || resizeActive}
-        onDragMouseDown={canDrag ? onDragMouseDown : undefined}
-        onResizeHandleMouseDown={canResize ? onResizeHandleMouseDown : undefined}
-        onResetToDefault={() => onResetToDefault(panel.id)}
-        onMinimizeToggle={() => onMinimizeToggle(panel.id)}
-        onMaximizeToggle={() => onMaximizeToggle(panel.id)}
-      />
+      {isTableWidget(widget) ? (
+        <TradingTable {...sharedWidgetProps} rows={widget.rows} />
+      ) : (
+        <ChartWidget
+          {...sharedWidgetProps}
+          chartType={(widget as ChartWidgetConfig).chartType}
+          series={(widget as ChartWidgetConfig).series}
+          categories={(widget as ChartWidgetConfig).categories}
+        />
+      )}
     </div>
   )
 }
@@ -557,6 +548,10 @@ function DashboardGrid() {
   const { ref: canvasRef, width: canvasWidth } = useResizeObserver<HTMLDivElement>()
   const chartWidgetsById = useMemo(
     () => new Map(chartWidgetsMock.map((widget) => [widget.id, widget] as const)),
+    [],
+  )
+  const tableWidgetsById = useMemo(
+    () => new Map(tableWidgetsMock.map((widget) => [widget.id, widget] as const)),
     [],
   )
   const dragSnapshotRef = useRef<PanelSnapshot | null>(null)
@@ -699,7 +694,7 @@ function DashboardGrid() {
   }, [])
 
   const handleResizeStart = useCallback(
-    (panelId: string) => {
+    (panelId: string, _direction: ResizeDirection) => {
       const panel = panels.find((item) => item.id === panelId)
 
       if (!panel) {
@@ -713,13 +708,24 @@ function DashboardGrid() {
   )
 
   const handleResize = useCallback(
-    (panelId: string, deltaX: number, deltaY: number) => {
+    (panelId: string, direction: ResizeDirection, deltaX: number, deltaY: number) => {
       const resizeSnapshot =
         resizeSnapshotRef.current?.id === panelId ? resizeSnapshotRef.current : null
 
       if (!resizeSnapshot || canvasWidth <= 0) {
         return
       }
+
+      const startRight = resizeSnapshot.x + resizeSnapshot.width
+      const startBottom = resizeSnapshot.y + resizeSnapshot.height
+      const resizeFromLeft =
+        direction === 'left' || direction === 'topLeft' || direction === 'bottomLeft'
+      const resizeFromTop =
+        direction === 'top' || direction === 'topLeft' || direction === 'topRight'
+      const resizeFromRight =
+        direction === 'right' || direction === 'topRight' || direction === 'bottomRight'
+      const resizeFromBottom =
+        direction === 'bottom' || direction === 'bottomLeft' || direction === 'bottomRight'
 
       setPanels((currentPanels) =>
         resolveResizePanels(
@@ -728,29 +734,55 @@ function DashboardGrid() {
               return panel
             }
 
-            const maxWidth = Math.max(canvasWidth - resizeSnapshot.x, resizeSnapshot.minWidth)
-            const nextWidth = clamp(
-              Math.round(resizeSnapshot.width + deltaX),
-              resizeSnapshot.minWidth,
-              maxWidth,
-            )
-            const nextHeight = Math.max(
-              Math.round(resizeSnapshot.height + deltaY),
-              resizeSnapshot.minHeight,
-            )
+            let nextX = resizeSnapshot.x
+            let nextY = resizeSnapshot.y
+            let nextWidth = resizeSnapshot.width
+            let nextHeight = resizeSnapshot.height
 
-            if (nextWidth === panel.width && nextHeight === panel.height) {
+            if (resizeFromLeft) {
+              const maxX = startRight - resizeSnapshot.minWidth
+              nextX = clamp(Math.round(resizeSnapshot.x + deltaX), 0, maxX)
+              nextWidth = startRight - nextX
+            } else if (resizeFromRight) {
+              const maxWidth = Math.max(canvasWidth - resizeSnapshot.x, resizeSnapshot.minWidth)
+              nextWidth = clamp(
+                Math.round(resizeSnapshot.width + deltaX),
+                resizeSnapshot.minWidth,
+                maxWidth,
+              )
+            }
+
+            if (resizeFromTop) {
+              const maxY = startBottom - resizeSnapshot.minHeight
+              nextY = clamp(Math.round(resizeSnapshot.y + deltaY), 0, maxY)
+              nextHeight = startBottom - nextY
+            } else if (resizeFromBottom) {
+              nextHeight = Math.max(
+                Math.round(resizeSnapshot.height + deltaY),
+                resizeSnapshot.minHeight,
+              )
+            }
+
+            if (
+              nextX === panel.x &&
+              nextY === panel.y &&
+              nextWidth === panel.width &&
+              nextHeight === panel.height
+            ) {
               return panel
             }
 
             return {
               ...panel,
+              x: nextX,
+              y: nextY,
               width: nextWidth,
               height: nextHeight,
             }
           }),
           panelId,
           canvasWidth,
+          direction,
         ),
       )
     },
@@ -903,11 +935,11 @@ function DashboardGrid() {
     <div ref={canvasRef} className="relative h-full min-h-0 w-full">
       <div className="h-full min-h-0 overflow-auto">
         <div
-          className="relative min-h-[720px] w-full"
+          className="relative min-h-180 w-full"
           style={{ height: canvasHeight }}
         >
           {canvasPanels.map((panel) => {
-            const widget = chartWidgetsById.get(panel.id)
+            const widget = chartWidgetsById.get(panel.id) ?? tableWidgetsById.get(panel.id)
 
             if (!widget) {
               return null
@@ -943,7 +975,7 @@ function DashboardGrid() {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
           <div className="relative w-full" style={{ height: dockHeight }}>
             {dockPanels.map((panel) => {
-              const widget = chartWidgetsById.get(panel.id)
+              const widget = chartWidgetsById.get(panel.id) ?? tableWidgetsById.get(panel.id)
 
               if (!widget) {
                 return null

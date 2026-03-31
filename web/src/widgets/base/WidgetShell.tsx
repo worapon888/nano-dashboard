@@ -1,4 +1,32 @@
-import type { MouseEventHandler, PropsWithChildren, ReactNode } from 'react'
+import type {
+  MouseEvent as ReactMouseEvent,
+  MouseEventHandler,
+  PropsWithChildren,
+  ReactNode,
+} from 'react'
+import type { ResizeDirection } from '../../types/resize'
+
+const resizeHandleClassByDirection: Record<ResizeDirection, string> = {
+  top: 'inset-x-3 top-0 h-3 -translate-y-1/2 cursor-ns-resize',
+  right: 'right-0 top-3 bottom-3 w-3 translate-x-1/2 cursor-ew-resize',
+  bottom: 'inset-x-3 bottom-0 h-3 translate-y-1/2 cursor-ns-resize',
+  left: 'left-0 top-3 bottom-3 w-3 -translate-x-1/2 cursor-ew-resize',
+  topRight: 'right-0 top-0 h-4 w-4 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize',
+  bottomRight: 'bottom-0 right-0 h-4 w-4 translate-x-1/2 translate-y-1/2 cursor-nwse-resize',
+  bottomLeft: 'bottom-0 left-0 h-4 w-4 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize',
+  topLeft: 'left-0 top-0 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize',
+}
+
+const resizeDirections: ResizeDirection[] = [
+  'top',
+  'right',
+  'bottom',
+  'left',
+  'topRight',
+  'bottomRight',
+  'bottomLeft',
+  'topLeft',
+]
 
 type WidgetShellProps = PropsWithChildren<{
   title: string
@@ -7,7 +35,12 @@ type WidgetShellProps = PropsWithChildren<{
   className?: string
   headerClassName?: string
   bodyClassName?: string
+  isResizeActive?: boolean
   onHeaderMouseDown?: MouseEventHandler<HTMLElement>
+  onResizeHandleMouseDown?: (
+    direction: ResizeDirection,
+    event: ReactMouseEvent<HTMLElement>,
+  ) => void
 }>
 
 function WidgetShell({
@@ -17,32 +50,56 @@ function WidgetShell({
   className = '',
   headerClassName = '',
   bodyClassName = '',
+  isResizeActive = false,
   onHeaderMouseDown,
+  onResizeHandleMouseDown,
   children,
 }: WidgetShellProps) {
   return (
     <section
-      className={`h-full overflow-hidden rounded-[22px] border border-white/8 bg-[#0a0a0a] shadow-[0_22px_60px_rgba(0,0,0,0.52)] ${className}`}
+      className={`relative h-full overflow-visible rounded-[22px] border border-white/8 bg-[#0a0a0a] shadow-[0_22px_60px_rgba(0,0,0,0.52)] ${
+        isResizeActive ? 'border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.28),0_22px_60px_rgba(0,0,0,0.52)]' : ''
+      } ${className}`}
     >
-      <header
-        onMouseDown={onHeaderMouseDown}
-        className={`relative flex items-start justify-between border-b border-white/8 bg-[#101010] px-4 py-3 sm:px-5 ${headerClassName}`}
-      >
-        <div className="min-w-0">
-          <h2 className="truncate text-[0.95rem] font-semibold tracking-[0.01em] text-slate-100">
-            {title}
-          </h2>
-          {subtitle ? (
-            <p className="mt-1 text-[0.78rem] uppercase tracking-[0.28em] text-slate-400">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-        {action ? <div className="ml-4 pt-1 text-sm text-slate-400">{action}</div> : null}
-      </header>
+      {onResizeHandleMouseDown
+        ? resizeDirections.map((direction) => (
+            <button
+              key={direction}
+              type="button"
+              aria-label={`Resize widget from ${direction}`}
+              onMouseDown={(event) => onResizeHandleMouseDown(direction, event)}
+              className={`absolute z-20 rounded-full border-0 bg-transparent p-0 opacity-0 outline-none transition-opacity duration-150 hover:opacity-100 focus:opacity-100 ${resizeHandleClassByDirection[direction]}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-0 rounded-full ${
+                  isResizeActive ? 'bg-sky-400/10' : ''
+                }`}
+              />
+            </button>
+          ))
+        : null}
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[inherit]">
+        <header
+          onMouseDown={onHeaderMouseDown}
+          className={`relative flex items-start justify-between border-b border-white/8 bg-[#101010] px-4 py-3 sm:px-5 ${headerClassName}`}
+        >
+          <div className="min-w-0">
+            <h2 className="truncate text-[0.95rem] font-semibold tracking-[0.01em] text-slate-100">
+              {title}
+            </h2>
+            {subtitle ? (
+              <p className="mt-1 text-[0.78rem] uppercase tracking-[0.28em] text-slate-400">
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
+          {action ? <div className="ml-4 pt-1 text-sm text-slate-400">{action}</div> : null}
+        </header>
 
-      <div className={`bg-[#0a0a0a] text-sm text-slate-300 ${bodyClassName}`}>
-        {children}
+        <div className={`flex min-h-0 flex-1 flex-col bg-[#0a0a0a] text-sm text-slate-300 ${bodyClassName}`}>
+          {children}
+        </div>
       </div>
     </section>
   )

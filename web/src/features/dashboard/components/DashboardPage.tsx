@@ -274,13 +274,40 @@ function Header() {
   )
 }
 
+function DashboardBackground() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      <div className="absolute inset-0 bg-[#05070a]" />
+
+      <div
+        className="absolute inset-0 opacity-100"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at 18% 14%, rgba(22, 163, 74, 0.045), transparent 30%),
+            radial-gradient(circle at 82% 10%, rgba(37, 99, 235, 0.04), transparent 28%),
+            radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.015), transparent 38%)
+          `,
+        }}
+      />
+
+      <div className="dashboard-grid-overlay absolute inset-0" />
+      <div className="dashboard-noise-overlay absolute inset-0" />
+    </div>
+  )
+}
+
 function DashboardPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-black text-slate-100">
-      <div className="flex min-h-screen min-h-0 flex-col px-6 py-8 sm:px-8 lg:px-10">
+    <main className="relative min-h-screen overflow-hidden bg-[#05070a] text-slate-100">
+      <DashboardBackground />
+
+      <div className="relative z-10 flex min-h-screen min-h-0 flex-col px-6 py-8 sm:px-8 lg:px-10">
         <Header />
 
-        <section className="mt-6 flex-1 overflow-hidden rounded-3xl border border-white/8 bg-[#050505] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] min-h-0">
+        <section className="mt-6 min-h-0 flex-1 overflow-hidden rounded-3xl border border-white/8 bg-[rgba(5,7,10,0.88)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
           <DashboardGrid />
         </section>
       </div>

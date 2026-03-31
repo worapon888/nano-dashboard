@@ -22,6 +22,37 @@ body,
 
 body {
   min-width: 320px;
+  background:
+    radial-gradient(circle at top left, rgba(22, 163, 74, 0.035), transparent 32%),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.03), transparent 30%),
+    #05070a;
+}
+
+.dashboard-grid-overlay {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.32), transparent 78%);
+  opacity: 0.22;
+}
+
+.dashboard-noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  opacity: 0.018;
+  mix-blend-mode: soft-light;
+}
+
+/* ApexCharts defaults to overflow:visible on its SVG, which lets bars and
+   pie segments escape overflow-hidden containers on the first render pass. */
+.apexcharts-canvas {
+  display: block;
+  overflow: hidden;
+}
+
+.apexcharts-canvas svg {
+  overflow: hidden;
 }
 
 html::-webkit-scrollbar,

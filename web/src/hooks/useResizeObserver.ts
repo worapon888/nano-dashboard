@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 type Size = {
   width: number
@@ -13,45 +13,68 @@ const defaultSize: Size = {
 function useResizeObserver<T extends HTMLElement>() {
   const [element, setElement] = useState<T | null>(null)
   const [size, setSize] = useState<Size>(defaultSize)
+  const frameRef = useRef<number | null>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!element) {
       setSize(defaultSize)
       return
     }
 
-    const updateSize = () => {
-      const nextWidth = Math.round(element.clientWidth)
-      const nextHeight = Math.round(element.clientHeight)
+    const commitSize = (nextWidth: number, nextHeight: number) => {
+      const roundedWidth = Math.round(nextWidth)
+      const roundedHeight = Math.round(nextHeight)
 
       setSize((currentSize) => {
         if (
-          currentSize.width === nextWidth &&
-          currentSize.height === nextHeight
+          Math.abs(currentSize.width - roundedWidth) <= 1 &&
+          Math.abs(currentSize.height - roundedHeight) <= 1
         ) {
           return currentSize
         }
 
         return {
-          width: nextWidth,
-          height: nextHeight,
+          width: roundedWidth,
+          height: roundedHeight,
         }
       })
     }
 
-    updateSize()
+    const scheduleSizeCommit = (nextWidth: number, nextHeight: number) => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+      }
+
+      frameRef.current = requestAnimationFrame(() => {
+        frameRef.current = null
+        commitSize(nextWidth, nextHeight)
+      })
+    }
 
     if (typeof ResizeObserver === 'undefined') {
+      const initialRect = element.getBoundingClientRect()
+      commitSize(initialRect.width, initialRect.height)
       return
     }
 
-    const observer = new ResizeObserver(() => {
-      updateSize()
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+
+      if (!entry) {
+        return
+      }
+
+      scheduleSizeCommit(entry.contentRect.width, entry.contentRect.height)
     })
 
     observer.observe(element)
 
     return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
+
       observer.disconnect()
     }
   }, [element])

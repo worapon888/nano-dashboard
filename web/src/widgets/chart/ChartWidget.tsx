@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import ReactApexChart from "react-apexcharts";
 import useResizeObserver from "../../hooks/useResizeObserver";
 import WidgetShell from "../base/WidgetShell";
@@ -8,6 +8,7 @@ import type {
   ChartType,
   PieChartSeries,
 } from "../../types/widget";
+import type { ResizeDirection } from "../../types/resize";
 import { buildChartOptions, getApexChartType } from "./chartOptions";
 
 type ChartWidgetProps = {
@@ -20,7 +21,10 @@ type ChartWidgetProps = {
   isDragging?: boolean;
   isResizing?: boolean;
   onDragMouseDown?: (event: ReactMouseEvent<HTMLElement>) => void;
-  onResizeHandleMouseDown?: (event: ReactMouseEvent<HTMLElement>) => void;
+  onResizeHandleMouseDown?: (
+    direction: ResizeDirection,
+    event: ReactMouseEvent<HTMLElement>,
+  ) => void;
   onResetToDefault?: () => void;
   onMinimizeToggle?: () => void;
   onMaximizeToggle?: () => void;
@@ -150,10 +154,14 @@ function ChartWidget({
     </div>
   );
   const chartId = toChartId(title, chartType);
-  const pieLabels = isPieSeries(series)
-    ? series.map((item) => item.name)
-    : undefined;
-  const incomingNormalizedChart = getApexSeries(chartType, series);
+  const pieLabels = useMemo(
+    () => (isPieSeries(series) ? series.map((item) => item.name) : undefined),
+    [series],
+  );
+  const incomingNormalizedChart = useMemo(
+    () => getApexSeries(chartType, series),
+    [chartType, series],
+  );
   const primaryCartesianSeries =
     incomingNormalizedChart &&
     incomingNormalizedChart.apexType !== "pie" &&
@@ -164,21 +172,37 @@ function ChartWidget({
     chartType === "line" && incomingNormalizedChart?.apexType === "area"
       ? primaryCartesianSeries
       : null;
-  const incomingChartOptions = buildChartOptions({
-    chartId,
-    chartType,
-    title,
-    categories,
-    labels: pieLabels,
-    values:
-      isStockStyleLineChart ||
-      isDailyPnlWidget ||
-      isVolumeProfileWidget ||
-      isPortfolioBreakdownWidget
-        ? primaryCartesianSeries?.data
-          ?? (isPieSeries(series) ? series.map((item) => item.value) : undefined)
-        : undefined,
-  });
+  const incomingChartOptions = useMemo(
+    () =>
+      buildChartOptions({
+        chartId,
+        chartType,
+        title,
+        categories,
+        labels: pieLabels,
+        values:
+          isStockStyleLineChart ||
+          isDailyPnlWidget ||
+          isVolumeProfileWidget ||
+          isPortfolioBreakdownWidget
+            ? primaryCartesianSeries?.data
+              ?? (isPieSeries(series) ? series.map((item) => item.value) : undefined)
+            : undefined,
+      }),
+    [
+      categories,
+      chartId,
+      chartType,
+      isDailyPnlWidget,
+      isPortfolioBreakdownWidget,
+      isStockStyleLineChart,
+      isVolumeProfileWidget,
+      pieLabels,
+      primaryCartesianSeries?.data,
+      series,
+      title,
+    ],
+  );
   const latestLineValue =
     lineSeries && lineSeries.data.length > 0
       ? lineSeries.data[lineSeries.data.length - 1]
@@ -214,7 +238,6 @@ function ChartWidget({
   const chartHeight = Math.max(height, 220);
   const chartWidth = Math.max(width, 0);
   const isReady = chartWidth > 0 && chartHeight > 0;
-  const chartKey = `${chartType}-${width}-${height}`;
   const dailyPnlAverage =
     dailyPnlValues.length > 0 ? dailyPnlTotal / dailyPnlValues.length : null;
 
@@ -300,13 +323,19 @@ function ChartWidget({
       className={`relative flex h-full flex-col ${isDragging || isResizing ? "select-none" : ""}`}
       headerClassName={`${onDragMouseDown ? "cursor-grab active:cursor-grabbing" : ""}`}
       bodyClassName={
-        isMinimized ? "overflow-hidden p-0" : "flex-1 overflow-hidden"
+        isMinimized ? "overflow-hidden p-0" : "min-h-0 overflow-hidden"
       }
+      isResizeActive={isResizing}
       onHeaderMouseDown={onDragMouseDown}
+      onResizeHandleMouseDown={
+        onResizeHandleMouseDown && !isMinimized && !isMaximized
+          ? onResizeHandleMouseDown
+          : undefined
+      }
     >
       {!isMinimized ? (
         <div
-          className={`relative flex h-full min-h-[220px] min-w-0 w-full flex-col overflow-hidden ${
+          className={`relative flex h-full min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden ${
             isStockStyleLineChart
               ? isBtcPriceTrendWidget
                 ? "rounded-[1.35rem] bg-[#0a0a0a] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_50px_rgba(0,0,0,0.35)]"
@@ -389,12 +418,11 @@ function ChartWidget({
                 ? "min-h-[250px] flex-1"
                 : isPortfolioBreakdownWidget
                   ? "min-h-[250px] flex-1"
-                  : "h-full"
+                  : "h-full min-h-0 flex-1"
             } relative z-[1] min-w-0 w-full overflow-hidden`}
           >
             {isReady ? (
               <ReactApexChart
-                key={chartKey}
                 type={normalizedChart.apexType}
                 series={normalizedChart.apexSeries}
                 options={chartOptions}
@@ -479,19 +507,6 @@ function ChartWidget({
             </div>
           ) : null}
         </div>
-      ) : null}
-      {onResizeHandleMouseDown && !isMinimized && !isMaximized ? (
-        <button
-          type="button"
-          aria-label={`Resize ${title} widget`}
-          onMouseDown={onResizeHandleMouseDown}
-          className="widget-resize-handle absolute bottom-3 right-3 z-10 h-4 w-4 cursor-nwse-resize rounded-sm border border-slate-600/70 bg-slate-800/90 shadow-md shadow-black/30 transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-400/70 relative"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0_38%,rgba(148,163,184,0.95)_38_48%,transparent_48_58%,rgba(148,163,184,0.95)_58_68%,transparent_68_100%)]"
-          />
-        </button>
       ) : null}
     </WidgetShell>
   );

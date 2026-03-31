@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import type { ResizeDirection } from '../../../types/resize'
+import { resizeCursorByDirection } from '../../../types/resize'
 
 type ResizeState = {
   startClientX: number
   startClientY: number
+  direction: ResizeDirection
 }
 
 type UseWidgetResizeParams = {
-  onResizeStart?: () => void
-  onResize: (deltaX: number, deltaY: number) => void
+  onResizeStart?: (direction: ResizeDirection) => void
+  onResize: (direction: ResizeDirection, deltaX: number, deltaY: number) => void
   onResizeEnd?: () => void
 }
 
@@ -54,6 +57,7 @@ function useWidgetResize({
       }
 
       onResize(
+        resizeState.direction,
         event.clientX - resizeState.startClientX,
         event.clientY - resizeState.startClientY,
       )
@@ -75,13 +79,14 @@ function useWidgetResize({
   useEffect(() => stopResizing, [stopResizing])
 
   const handleResizeMouseDown = useCallback(
-    (event: ReactMouseEvent<HTMLElement>) => {
+    (direction: ResizeDirection, event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault()
       event.stopPropagation()
 
       resizeStateRef.current = {
         startClientX: event.clientX,
         startClientY: event.clientY,
+        direction,
       }
 
       restoreStylesRef.current = {
@@ -89,10 +94,10 @@ function useWidgetResize({
         userSelect: document.body.style.userSelect,
       }
 
-      document.body.style.cursor = 'nwse-resize'
+      document.body.style.cursor = resizeCursorByDirection[direction]
       document.body.style.userSelect = 'none'
       setIsResizing(true)
-      onResizeStart?.()
+      onResizeStart?.(direction)
     },
     [onResizeStart],
   )

@@ -5,7 +5,8 @@ export type DashboardPanel = {
   w: number
   h: number
   title: string
-  chartType: 'line' | 'bar' | 'column' | 'pie'
+  widgetType?: 'chart' | 'table'
+  chartType?: 'line' | 'bar' | 'column' | 'pie'
 }
 
 export const dashboardPanelsMock: DashboardPanel[] = [
@@ -16,6 +17,7 @@ export const dashboardPanelsMock: DashboardPanel[] = [
     w: 6,
     h: 5,
     title: 'BTC Price Trend',
+    widgetType: 'chart',
     chartType: 'line',
   },
   {
@@ -25,6 +27,7 @@ export const dashboardPanelsMock: DashboardPanel[] = [
     w: 6,
     h: 5,
     title: 'Volume Profile',
+    widgetType: 'chart',
     chartType: 'bar',
   },
   {
@@ -34,6 +37,7 @@ export const dashboardPanelsMock: DashboardPanel[] = [
     w: 7,
     h: 5,
     title: 'Daily PNL',
+    widgetType: 'chart',
     chartType: 'column',
   },
   {
@@ -43,6 +47,16 @@ export const dashboardPanelsMock: DashboardPanel[] = [
     w: 5,
     h: 5,
     title: 'Portfolio Breakdown',
+    widgetType: 'chart',
     chartType: 'pie',
+  },
+  {
+    id: 'open-orders',
+    x: 0,
+    y: 10,
+    w: 12,
+    h: 6,
+    title: 'Open Orders',
+    widgetType: 'table',
   },
 ]

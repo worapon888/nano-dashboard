@@ -147,6 +147,9 @@ export function buildChartOptions({
       id: chartId,
       type: apexChartType,
       background: "transparent",
+      redrawOnParentResize: false,
+      redrawOnWindowResize: false,
+      parentHeightOffset: 0,
       fontFamily: isPortfolioBreakdown
         ? "ui-sans-serif, system-ui, sans-serif"
         : undefined,
@@ -174,8 +177,10 @@ export function buildChartOptions({
           ? {
               enabled: true,
               speed: isBtcPriceTrend ? 700 : 550,
+              // animateGradually causes pie segments to appear one-by-one,
+              // producing the stacking/jitter glitch on initial mount.
               animateGradually: {
-                enabled: true,
+                enabled: false,
                 delay: isBtcPriceTrend ? 60 : 70,
               },
               dynamicAnimation: {
@@ -183,7 +188,9 @@ export function buildChartOptions({
                 speed: isBtcPriceTrend ? 700 : 350,
               },
             }
-          : undefined,
+          : // Explicit disable prevents ApexCharts default animation (bars
+            // growing from 0-width) which causes the Volume Profile stutter.
+            { enabled: false },
       toolbar: {
         show:
           !isBtcPriceTrend &&
