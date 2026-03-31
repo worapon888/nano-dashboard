@@ -23,7 +23,6 @@ export function getApexChartType(chartType: ChartType): "line" | "bar" | "pie" {
 export function buildChartOptions({
   chartId,
   chartType,
-  title,
   categories,
   labels,
   values,
@@ -31,8 +30,6 @@ export function buildChartOptions({
   const isBarChart = chartType === "bar";
   const isColumnChart = chartType === "column";
   const isLineChart = chartType === "line";
-  const isDailyPnlColumn =
-    isColumnChart && title.trim().toLowerCase() === "daily pnl";
   const apexChartType = getApexChartType(chartType);
   const isCartesianChart = axisChartTypes.includes(chartType);
   const minValue =
@@ -68,21 +65,12 @@ export function buildChartOptions({
             color: "#58ffd6",
             opacity: 0.9,
           }
-        : isDailyPnlColumn
-          ? {
-              enabled: true,
-              top: 0,
-              left: 0,
-              blur: 6,
-              color: "#7cff6b",
-              opacity: 0.35,
-            }
         : undefined,
       toolbar: {
-        show: !isLineChart && !isDailyPnlColumn,
+        show: !isLineChart,
       },
       sparkline: {
-        enabled: isDailyPnlColumn,
+        enabled: false,
       },
     },
     theme: {
@@ -90,8 +78,6 @@ export function buildChartOptions({
     },
     colors: isLineChart
       ? ["#58ffd6"]
-      : isDailyPnlColumn
-        ? ["#7cff6b"]
       : chartType === "pie"
         ? ["#59ffd0", "#34d399", "#14b8a6", "#0ea5a4", "#7dd3fc"]
         : ["#3fd8af"],
@@ -116,11 +102,11 @@ export function buildChartOptions({
               shade: "dark",
               type: isBarChart ? "horizontal" : "vertical",
               shadeIntensity: 0,
-              gradientToColors: isDailyPnlColumn ? ["#081108"] : ["#123d31"],
+              gradientToColors: ["#123d31"],
               inverseColors: false,
-              opacityFrom: isDailyPnlColumn ? 1 : 0.96,
-              opacityTo: isDailyPnlColumn ? 0.08 : 0.34,
-              stops: isDailyPnlColumn ? [0, 8, 100] : [0, 18, 100],
+              opacityFrom: 0.96,
+              opacityTo: 0.34,
+              stops: [0, 18, 100],
             },
           }
       : undefined,
@@ -176,7 +162,6 @@ export function buildChartOptions({
     },
     grid: isCartesianChart
       ? {
-          show: !isDailyPnlColumn,
           borderColor: isLineChart
             ? "rgba(122, 255, 223, 0.24)"
             : isColumnChart
@@ -191,14 +176,6 @@ export function buildChartOptions({
             colors: ["transparent"],
             opacity: 0,
           },
-          padding: isDailyPnlColumn
-            ? {
-                top: 6,
-                right: 0,
-                bottom: -8,
-                left: 0,
-              }
-            : undefined,
         }
       : undefined,
     xaxis: isCartesianChart
@@ -213,7 +190,6 @@ export function buildChartOptions({
             },
           },
           labels: {
-            show: !isDailyPnlColumn,
             style: {
               colors: isLineChart
                 ? "#7ea190"
@@ -224,7 +200,6 @@ export function buildChartOptions({
             },
           },
           axisBorder: {
-            show: !isDailyPnlColumn,
             color: isLineChart
               ? "rgba(72, 101, 92, 0.16)"
               : isColumnChart
@@ -232,7 +207,6 @@ export function buildChartOptions({
                 : "rgba(148, 163, 184, 0.16)",
           },
           axisTicks: {
-            show: !isDailyPnlColumn,
             color: isLineChart
               ? "rgba(72, 101, 92, 0.16)"
               : isColumnChart
@@ -243,12 +217,10 @@ export function buildChartOptions({
       : undefined,
     yaxis: isCartesianChart
       ? {
-          show: !isDailyPnlColumn,
           min: yAxisMin,
           max: yAxisMax,
           tickAmount: isLineChart ? 5 : undefined,
           labels: {
-            show: !isDailyPnlColumn,
             formatter: isLineChart
               ? (value: number) => value.toFixed(0)
               : undefined,
@@ -266,14 +238,10 @@ export function buildChartOptions({
     plotOptions: {
       bar: {
         horizontal: isBarChart,
-        borderRadius: isColumnChart ? (isDailyPnlColumn ? 1 : 3) : 0,
+        borderRadius: isColumnChart ? 3 : 0,
         borderRadiusApplication: isColumnChart ? "end" : "around",
         borderRadiusWhenStacked: "last",
-        columnWidth: isColumnChart
-          ? isDailyPnlColumn
-            ? "92%"
-            : "62%"
-          : undefined,
+        columnWidth: isColumnChart ? "62%" : undefined,
         barHeight: isBarChart ? "82%" : undefined,
         distributed: false,
         colors: isColumnChart
@@ -299,12 +267,8 @@ export function buildChartOptions({
         }
       : isColumnChart
         ? {
-            width: isDailyPnlColumn ? 1.2 : 1,
-            colors: [
-              isDailyPnlColumn
-                ? "rgba(15, 35, 12, 0.8)"
-                : "rgba(120, 255, 221, 0.28)",
-            ],
+            width: 1,
+            colors: ["rgba(120, 255, 221, 0.28)"],
           }
         : undefined,
   };
