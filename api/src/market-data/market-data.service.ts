@@ -451,6 +451,20 @@ export class MarketDataService {
 
   async getTicker(symbol: string): Promise<TickerDto> {
     const normalizedSymbol = this.normalizeSymbol(symbol);
+    const redisClient = this.redisService.getClient();
+
+    if (!redisClient) {
+      this.logger.warn(
+        `Redis unavailable; fetching ticker directly for ${normalizedSymbol}`,
+      );
+      const directTicker =
+        await this.getTickerFromBinanceOrFallbackWithoutRedis(normalizedSymbol);
+
+      return this.isStaleTicker(directTicker)
+        ? directTicker
+        : this.withCacheSource(directTicker, 'fresh');
+    }
+
     const hotCacheKey = this.getHotCacheKey(normalizedSymbol);
     const cachedTicker = await this.redisService.get<TickerDto>(hotCacheKey);
 
@@ -570,6 +584,24 @@ export class MarketDataService {
     } catch (error) {
       if (this.isBinanceUnavailableError(error)) {
         return this.getStaleTickerOrThrow(symbol);
+      }
+
+      throw error;
+    }
+  }
+
+  private async getTickerFromBinanceOrFallbackWithoutRedis(
+    symbol: string,
+  ): Promise<TickerDto> {
+    try {
+      const ticker = await this.binanceService.getTicker(symbol);
+      this.logger.log(`Ticker direct Binance fetch success for ${symbol}`);
+      return this.stripRuntimeCacheFlags(ticker);
+    } catch (error) {
+      if (this.isBinanceUnavailableError(error)) {
+        this.logger.warn(
+          `Ticker direct fetch unavailable for ${symbol} and Redis is disabled`,
+        );
       }
 
       throw error;

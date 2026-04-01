@@ -9,7 +9,7 @@ This is not presented as a fully production-hardened trading platform. Some part
 ## Live Demo
 
 - Frontend URL: `https://nano-dashboard-pi.vercel.app`
-- Backend URL: `https://nano-dashboard.onrender.com`
+- Backend URL: `https://dynamic-embrace-production.up.railway.app`
 - API docs URL: `N/A - Swagger/OpenAPI is not currently exposed; see API Summary below`
 
 ## Overview

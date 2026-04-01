@@ -13,7 +13,7 @@ async function bootstrap() {
     app.useWebSocketAdapter(new platform_ws_1.WsAdapter(app));
     app.setGlobalPrefix('api');
     app.enableCors({
-        origin: ['http://localhost:5173'],
+        origin: ['http://localhost:5173', 'https://nano-dashboard-pi.vercel.app'],
         credentials: true,
     });
     app.useGlobalPipes(new common_1.ValidationPipe({

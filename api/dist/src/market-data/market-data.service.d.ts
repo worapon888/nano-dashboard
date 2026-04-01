@@ -75,6 +75,7 @@ export declare class MarketDataService {
     private waitForFetcherOrFallback;
     private getStaleTickerOrThrow;
     private getTickerFromBinanceOrFallback;
+    private getTickerFromBinanceOrFallbackWithoutRedis;
     private broadcastFetcherUpdate;
     private publishTickerUpdate;
     private writeTickerCaches;

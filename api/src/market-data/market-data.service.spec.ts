@@ -32,6 +32,7 @@ describe('MarketDataService', () => {
       publish: jest.fn(),
       setNx: jest.fn(),
       subscribeOnce: jest.fn(),
+      getClient: jest.fn().mockReturnValue({}),
     } as unknown as jest.Mocked<RedisService>;
 
     binanceService = {
@@ -295,5 +296,24 @@ describe('MarketDataService', () => {
       expect.objectContaining({ symbol: 'BTCUSDT', price: '65000.12' }),
       expect.objectContaining({ symbol: 'ETHUSDT', price: '3200.10' }),
     ]);
+  });
+
+  it('fetches directly from Binance when Redis is disabled', async () => {
+    const btcTicker: TickerDto = {
+      ...ticker,
+      symbol: 'BTCUSDT',
+    };
+
+    redisService.getClient.mockReturnValueOnce(null);
+    binanceService.getTicker.mockResolvedValueOnce(btcTicker);
+
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
+      ...btcTicker,
+      cacheSource: 'fresh',
+    });
+
+    expect(redisService.setNx).not.toHaveBeenCalled();
+    expect(redisService.subscribeOnce).not.toHaveBeenCalled();
+    expect(binanceService.getTicker).toHaveBeenCalledWith('BTCUSDT');
   });
 });

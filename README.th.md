@@ -9,7 +9,7 @@ NanoDashboard เป็นผลงาน take-home assignment สำหรั�
 ## Live Demo
 
 - Frontend URL: `https://nano-dashboard-pi.vercel.app/`
-- Backend URL: `https://nano-dashboard.onrender.com`
+- Backend URL: `https://dynamic-embrace-production.up.railway.app`
 - API docs URL: `N/A - ยังไม่ได้เปิด Swagger/OpenAPI; ดู API Summary ด้านล่าง`
 
 ## Overview

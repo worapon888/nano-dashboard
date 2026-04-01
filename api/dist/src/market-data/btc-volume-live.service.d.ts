@@ -1,25 +1,37 @@
 import { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BinanceService } from '../binance/binance.service';
 import type { MarketEventsPublisher } from '../events/events.tokens';
 export declare class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
     private readonly configService;
+    private readonly binanceService;
     private readonly marketEventsPublisher?;
     private readonly logger;
     private socket;
     private reconnectTimer;
+    private fallbackPollTimer;
     private reconnectAttempt;
     private isShuttingDown;
     private readonly lastEventSignatureByTimeframe;
-    constructor(configService: ConfigService, marketEventsPublisher?: MarketEventsPublisher | undefined);
+    private isFallbackActive;
+    private isPollingFallback;
+    constructor(configService: ConfigService, binanceService: BinanceService, marketEventsPublisher?: MarketEventsPublisher | undefined);
     onModuleInit(): void;
     onModuleDestroy(): void;
     private shouldStartStream;
     private connect;
     private handleMessage;
+    private publishUpdate;
     private parseMessage;
     private normalizeInterval;
     private scheduleReconnect;
     private getWsStreamUrl;
+    private getResolvedStreamUrl;
+    private activateFallback;
+    private deactivateFallback;
+    private stopFallbackPolling;
+    private pollFallbackOnce;
+    private classifyFallbackReason;
     private formatVolumeLabel;
     private toOptionalFiniteNumber;
 }
