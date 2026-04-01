@@ -20,7 +20,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   app.enableCors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'https://nano-dashboard-pi.vercel.app'],
     credentials: true,
   });
 
