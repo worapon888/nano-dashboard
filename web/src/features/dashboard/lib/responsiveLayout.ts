@@ -42,9 +42,10 @@ function getResponsivePanelHeight(
 
   const scale = targetWidth / Math.max(panel.width, 1)
   const scaledHeight = Math.round(panel.height * scale)
+  const extraMobileHeight = mode === 'mobile' && panel.id === 'btc-price-trend' ? 240 : 0
   const minimumHeight = mode === 'mobile' ? 220 : 240
   const maximumHeight = mode === 'mobile' ? 560 : 640
-  return clamp(scaledHeight, minimumHeight, maximumHeight)
+  return clamp(scaledHeight + extraMobileHeight, minimumHeight, maximumHeight)
 }
 
 export function getDashboardViewportMode(containerWidth: number): DashboardViewportMode {

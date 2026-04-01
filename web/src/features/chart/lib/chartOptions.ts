@@ -92,6 +92,8 @@ export function buildChartOptions({
   const isVolumeProfile = variant === "volume-profile";
   const isDailyPnlColumn = variant === "daily-pnl";
   const isPortfolioBreakdown = variant === "portfolio-breakdown";
+  const isMobileViewport =
+    typeof window !== "undefined" && window.innerWidth < 640;
   const marketTrendChange = presentation?.marketTrendData?.change24h ?? null;
   const isNegativeMarketTrend =
     isBtcPriceTrend && marketTrendChange !== null && marketTrendChange < 0;
@@ -606,7 +608,17 @@ export function buildChartOptions({
           },
           labels: {
             show: !isVolumeProfile,
+            hideOverlappingLabels: isBtcPriceTrend,
             offsetY: isDailyPnlColumn ? -2 : undefined,
+            rotate: isBtcPriceTrend && isMobileViewport ? 0 : undefined,
+            rotateAlways: isBtcPriceTrend && isMobileViewport ? false : undefined,
+            minHeight: isBtcPriceTrend && isMobileViewport ? 20 : undefined,
+            maxHeight: isBtcPriceTrend && isMobileViewport ? 20 : undefined,
+            formatter:
+              isBtcPriceTrend && isMobileViewport
+                ? (value: string | number, _timestamp?: number, opts?: { dataPointIndex?: number }) =>
+                    (opts?.dataPointIndex ?? 0) % 6 === 0 ? String(value) : ""
+                : undefined,
             style: {
               colors: isLineChart
                 ? isBtcPriceTrend

@@ -796,11 +796,12 @@ type SummaryCardProps = {
   eyebrow: string
   title: string
   children: ReactNode
+  className?: string
 }
 
-function SummaryCard({ eyebrow, title, children }: SummaryCardProps) {
+function SummaryCard({ eyebrow, title, children, className = '' }: SummaryCardProps) {
   return (
-    <article className="flex h-full min-h-[14rem] flex-col rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] xl:h-[15rem]">
+    <article className={`flex min-h-[14rem] flex-col rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] xl:h-[15rem] ${className}`}>
       <p className="text-[0.66rem] uppercase tracking-[0.26em] text-slate-500">{eyebrow}</p>
       <h2 className="mt-2 text-sm font-semibold tracking-[0.02em] text-white">{title}</h2>
       <div className="mt-4 min-h-0 flex-1">{children}</div>
@@ -1043,7 +1044,7 @@ function TopMoversWidget({
   }
 
   return (
-    <div className="dashboard-themed-scroll dashboard-touch-scroll h-full min-h-0 overflow-y-auto pr-1">
+    <div className="pr-1 xl:dashboard-themed-scroll xl:dashboard-touch-scroll xl:h-full xl:min-h-0 xl:overflow-y-auto">
       <ul className="space-y-3">
         {items.map((mover) => (
           <TopMoverRow key={`${mover.symbol}-${mover.fetchedAt}`} mover={mover} />
@@ -1087,7 +1088,7 @@ function DashboardSummarySection({
         </div>
       ) : null}
 
-      <div className="grid items-stretch gap-4 xl:grid-cols-[0.9fr_1.1fr_1.5fr]">
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr_1.5fr] xl:items-stretch">
         <SummaryCard eyebrow="Users" title="Active Users">
           <ActiveUsersWidget userCount={userCount} loading={loading} error={error} />
         </SummaryCard>
@@ -1100,7 +1101,7 @@ function DashboardSummarySection({
           />
         </SummaryCard>
 
-        <SummaryCard eyebrow="Movers" title="Top Movers">
+        <SummaryCard eyebrow="Movers" title="Top Movers" className="min-h-[24rem] sm:min-h-[14rem]">
           <TopMoversWidget items={topMovers} loading={loading} error={error} />
         </SummaryCard>
       </div>
