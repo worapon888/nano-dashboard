@@ -8,7 +8,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000/api"
+      "value": "https://dynamic-embrace-production.up.railway.app/api"
     },
     {
       "key": "accessToken",
@@ -47,13 +47,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/register",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "register"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
             },
             "description": "Register a new account."
           },
@@ -74,13 +69,8 @@
                 },
                 "url": {
                   "raw": "{{baseUrl}}/auth/register",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "auth",
-                    "register"
-                  ]
+                  "host": ["{{baseUrl}}"],
+                  "path": ["auth", "register"]
                 }
               },
               "status": "Created",
@@ -107,13 +97,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
             },
             "description": "Authenticate and receive access and refresh tokens."
           },
@@ -134,13 +119,8 @@
                 },
                 "url": {
                   "raw": "{{baseUrl}}/auth/login",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "auth",
-                    "login"
-                  ]
+                  "host": ["{{baseUrl}}"],
+                  "path": ["auth", "login"]
                 }
               },
               "status": "OK",
@@ -163,13 +143,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "me"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
             },
             "description": "Get the authenticated user profile."
           },
@@ -200,13 +175,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/refresh",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "refresh"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
             },
             "description": "Exchange a valid refresh token for a new access token pair."
           },
@@ -238,12 +208,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users?page=1&limit=10",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
               "query": [
                 {
                   "key": "page",
@@ -279,13 +245,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
             }
           },
           "response": [
@@ -319,13 +280,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
             }
           },
           "response": [
@@ -351,13 +307,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
             }
           },
           "response": [
@@ -388,14 +339,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/market/ticker/{{symbol}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "market",
-                "ticker",
-                "{{symbol}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["market", "ticker", "{{symbol}}"]
             }
           },
           "response": [
@@ -426,12 +371,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/dashboard",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "dashboard"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"]
             }
           },
           "response": [
@@ -457,13 +398,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/dashboard/summary?range=1h&volumeTf=1h&pnlRange=week",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "dashboard",
-                "summary"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
               "query": [
                 {
                   "key": "range",
