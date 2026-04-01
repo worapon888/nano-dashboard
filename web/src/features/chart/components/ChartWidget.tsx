@@ -69,17 +69,43 @@ function ChartWidget({
         tone="error"
         heading="Chart unavailable"
         description="This widget could not render because its chart data does not match the configured chart type."
+        isMinimized={isMinimized}
+        isMaximized={isMaximized}
+        isDragging={isDragging}
+        isResizing={isResizing}
+        onDragPointerDown={onDragPointerDown}
+        onResizeHandlePointerDown={onResizeHandlePointerDown}
+        onResetToDefault={onResetToDefault}
+        onMinimizeToggle={onMinimizeToggle}
+        onMaximizeToggle={onMaximizeToggle}
+        onControlPointerDown={stopHeaderPointerEvent}
       />
     )
   }
 
   if (viewModel.state === 'empty') {
+    const isMarketTrendWidget = presentation?.variant === 'market-trend'
+
     return (
       <ChartStateNotice
         title={title}
         tone="empty"
-        heading="No chart data"
-        description="This widget is ready, but there is no data available for the selected chart yet."
+        heading={isMarketTrendWidget ? 'No BTC trend data available' : 'No chart data'}
+        description={
+          isMarketTrendWidget
+            ? 'This widget is ready, but the dashboard summary did not include usable BTC trend points yet.'
+            : 'This widget is ready, but there is no data available for the selected chart yet.'
+        }
+        isMinimized={isMinimized}
+        isMaximized={isMaximized}
+        isDragging={isDragging}
+        isResizing={isResizing}
+        onDragPointerDown={onDragPointerDown}
+        onResizeHandlePointerDown={onResizeHandlePointerDown}
+        onResetToDefault={onResetToDefault}
+        onMinimizeToggle={onMinimizeToggle}
+        onMaximizeToggle={onMaximizeToggle}
+        onControlPointerDown={stopHeaderPointerEvent}
       />
     )
   }
@@ -109,6 +135,17 @@ function ChartWidget({
           lineMetrics={viewModel.lineMetrics}
           dailyPnlMetrics={viewModel.dailyPnlMetrics}
           rangeLabels={viewModel.rangeLabels}
+          selectedRange={presentation?.marketTrendControls?.selectedRange}
+          onRangeChange={presentation?.marketTrendControls?.onRangeChange}
+          isRangeUpdating={presentation?.marketTrendControls?.isUpdating}
+          liveStatus={presentation?.marketTrendControls?.liveStatus}
+          selectedVolumeTimeframe={presentation?.volumeProfileControls?.selectedTimeframe}
+          onVolumeTimeframeChange={presentation?.volumeProfileControls?.onTimeframeChange}
+          isVolumeUpdating={presentation?.volumeProfileControls?.isUpdating}
+          totalVolume={presentation?.volumeProfileData?.totalVolume}
+          dailyPnlRange={presentation?.dailyPnlControls?.selectedRange}
+          onDailyPnlRangeChange={presentation?.dailyPnlControls?.onRangeChange}
+          isDailyPnlUpdating={presentation?.dailyPnlControls?.isUpdating}
           onControlPointerDown={stopHeaderPointerEvent}
         >
           <ChartRenderer

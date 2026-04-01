@@ -6,6 +6,7 @@ class TickerDto {
     price;
     volume24h;
     priceChange24h;
+    priceChange24hPercent;
     high24h;
     low24h;
     fetchedAt;

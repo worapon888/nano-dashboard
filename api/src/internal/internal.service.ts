@@ -55,19 +55,12 @@ export class InternalService {
   }
 
   private async getRedisHealth(): Promise<HealthStatus> {
-    if (!this.redisService?.getClient) {
+    if (!this.redisService) {
       return 'unknown';
     }
 
     try {
-      const client = this.redisService.getClient();
-
-      if (!client) {
-        return 'unknown';
-      }
-
-      await client.ping();
-      return 'up';
+      return (await this.redisService.ping()) ? 'up' : 'down';
     } catch (error) {
       this.logger.warn(
         `Redis health check failed: ${

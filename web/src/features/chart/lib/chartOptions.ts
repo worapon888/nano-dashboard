@@ -1,6 +1,42 @@
 import type { ApexOptions } from "apexcharts";
 import type { ChartType, ChartWidgetPresentation } from "../../../shared/types/widget";
 
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+
+  if (normalized.length !== 6) {
+    return hex;
+  }
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+
+  return `rgba(${red},${green},${blue},${alpha})`;
+}
+
+function blendHexColors(startHex: string, endHex: string, ratio: number) {
+  const clampRatio = Math.max(0, Math.min(1, ratio));
+  const start = startHex.replace("#", "");
+  const end = endHex.replace("#", "");
+
+  if (start.length !== 6 || end.length !== 6) {
+    return startHex;
+  }
+
+  const channels = [0, 2, 4].map((offset) => {
+    const startValue = Number.parseInt(start.slice(offset, offset + 2), 16);
+    const endValue = Number.parseInt(end.slice(offset, offset + 2), 16);
+    const mixedValue = Math.round(
+      startValue + (endValue - startValue) * clampRatio,
+    );
+
+    return mixedValue.toString(16).padStart(2, "0");
+  });
+
+  return `#${channels.join("")}`;
+}
+
 function stripUndefined<T extends object>(obj: T): T {
   return Object.fromEntries(
     Object.entries(obj)
@@ -56,6 +92,17 @@ export function buildChartOptions({
   const isVolumeProfile = variant === "volume-profile";
   const isDailyPnlColumn = variant === "daily-pnl";
   const isPortfolioBreakdown = variant === "portfolio-breakdown";
+  const marketTrendChange = presentation?.marketTrendData?.change24h ?? null;
+  const isNegativeMarketTrend =
+    isBtcPriceTrend && marketTrendChange !== null && marketTrendChange < 0;
+  const marketTrendLineColor = isNegativeMarketTrend ? "#F87171" : "#00E5A8";
+  const marketTrendGlowColor = isNegativeMarketTrend ? "#EF4444" : "#00E5A8";
+  const marketTrendGradientColor = isNegativeMarketTrend
+    ? "rgba(239,68,68,0.34)"
+    : "#00E5A8";
+  const marketTrendGridColor = isNegativeMarketTrend
+    ? "rgba(248,113,113,0.12)"
+    : "rgba(255,255,255,0.09)";
   const apexChartType = getApexChartType(chartType, presentation);
   const isCartesianChart = axisChartTypes.includes(chartType);
   const minValue =
@@ -103,26 +150,62 @@ export function buildChartOptions({
         value >= 0 ? "rgba(13,107,83,0.35)" : "rgba(239,68,68,0.35)",
       )
     : undefined;
-  const volumeProfileLabelColors = isVolumeProfile
-    ? values?.map(() => "rgba(255,255,255,0.72)")
-    : undefined;
-  const volumeProfilePivotIndex =
+  const volumeProfileDirections =
+    isVolumeProfile &&
+    Array.isArray(presentation?.volumeProfileData?.directions) &&
+    values &&
+    presentation.volumeProfileData.directions.length === values.length
+      ? presentation.volumeProfileData.directions
+      : undefined;
+  const providedVolumeProfileColors =
+    isVolumeProfile &&
+    Array.isArray(presentation?.volumeProfileData?.colors) &&
+    values &&
+    presentation.volumeProfileData.colors.length === values.length
+      ? presentation.volumeProfileData.colors
+      : undefined;
+  const volumeProfileMaxValue =
     isVolumeProfile && values && values.length > 0
-      ? values.indexOf(Math.max(...values))
+      ? Math.max(...values)
       : undefined;
   const volumeProfileBarColors = isVolumeProfile
-    ? values?.map((_, index) =>
-        volumeProfilePivotIndex !== undefined && index < volumeProfilePivotIndex
-          ? "rgba(246,70,93,0.9)"
-          : "rgba(14,203,129,0.9)",
-      )
+    ? values?.map((value, index) => {
+        const direction =
+          volumeProfileDirections?.[index] ??
+          (providedVolumeProfileColors?.[index]?.toLowerCase() === "#22c55e"
+            ? "bullish"
+            : providedVolumeProfileColors?.[index]?.toLowerCase() === "#ef4444"
+              ? "bearish"
+              : "bullish");
+
+        const normalizedVolume =
+          volumeProfileMaxValue && volumeProfileMaxValue > 0
+            ? value / volumeProfileMaxValue
+            : 0.55;
+        const intensity = 0.3 + normalizedVolume * 0.7;
+
+        return direction === "bullish"
+          ? blendHexColors("#0b3e38", "#16e2b3", intensity)
+          : blendHexColors("#471822", "#f36b7f", intensity);
+      })
     : undefined;
   const volumeProfileGradientToColors = isVolumeProfile
-    ? values?.map((_, index) =>
-        volumeProfilePivotIndex !== undefined && index < volumeProfilePivotIndex
-          ? "rgba(246,70,93,0.15)"
-          : "rgba(14,203,129,0.15)",
-      )
+    ? values?.map((value, index) => {
+        const direction =
+          volumeProfileDirections?.[index] ??
+          (providedVolumeProfileColors?.[index]?.toLowerCase() === "#22c55e"
+            ? "bullish"
+            : "bearish");
+        const normalizedVolume =
+          volumeProfileMaxValue && volumeProfileMaxValue > 0
+            ? value / volumeProfileMaxValue
+            : 0.55;
+        const opacity = 0.2 + normalizedVolume * 0.16;
+
+        return direction === "bullish"
+          ? hexToRgba("#0d8d76", opacity)
+          : hexToRgba("#9a3047", opacity);
+      })
     : undefined;
   const portfolioPalette = [
     "#EAB308",
@@ -156,7 +239,7 @@ export function buildChartOptions({
             top: 0,
             left: 0,
             blur: isBtcPriceTrend ? 8 : 10,
-            color: isBtcPriceTrend ? "#00E5A8" : "#58ffd6",
+            color: isBtcPriceTrend ? marketTrendGlowColor : "#58ffd6",
             opacity: isBtcPriceTrend ? 0.3 : 0.9,
           }
         : isVolumeProfile
@@ -164,11 +247,11 @@ export function buildChartOptions({
               enabled: true,
               top: 0,
               left: 0,
-              blur: 9,
-              color: "#35d6ae",
-              opacity: 0.35,
+              blur: 4,
+              color: "rgba(22, 226, 179, 0.14)",
+              opacity: 0.16,
             }
-          : undefined,
+        : undefined,
       animations:
         isBtcPriceTrend || isPortfolioBreakdown
           ? {
@@ -204,7 +287,7 @@ export function buildChartOptions({
       mode: "dark",
     },
     colors: isLineChart
-      ? [isBtcPriceTrend ? "#00E5A8" : "#58ffd6"]
+      ? [isBtcPriceTrend ? marketTrendLineColor : "#58ffd6"]
       : isDailyPnlColumn
         ? dailyPnlBarColors
         : isVolumeProfile
@@ -221,7 +304,9 @@ export function buildChartOptions({
             shade: "dark",
             type: "vertical",
             shadeIntensity: 0,
-            gradientToColors: [isBtcPriceTrend ? "#00E5A8" : "#0d6b53"],
+            gradientToColors: [
+              isBtcPriceTrend ? marketTrendGradientColor : "#0d6b53",
+            ],
             inverseColors: false,
             opacityFrom: isBtcPriceTrend ? 0.4 : 0.7,
             opacityTo: isBtcPriceTrend ? 0 : 0.4,
@@ -253,9 +338,9 @@ export function buildChartOptions({
               shadeIntensity: 0,
               gradientToColors: volumeProfileGradientToColors,
               inverseColors: false,
-              opacityFrom: 1,
-              opacityTo: 1,
-              stops: [0, 56, 100],
+              opacityFrom: 0.94,
+              opacityTo: 0.72,
+              stops: [0, 76, 100],
             },
           }
           : isPortfolioBreakdown
@@ -276,8 +361,8 @@ export function buildChartOptions({
     markers: isLineChart
       ? {
           size: 0,
-          colors: [isBtcPriceTrend ? "#00E5A8" : "#58ffd6"],
-          strokeColors: isBtcPriceTrend ? "#00E5A8" : "#dffff7",
+          colors: [isBtcPriceTrend ? marketTrendLineColor : "#58ffd6"],
+          strokeColors: isBtcPriceTrend ? marketTrendLineColor : "#dffff7",
           strokeWidth: isBtcPriceTrend ? 2 : 3,
           discrete:
             values && values.length > 0
@@ -286,7 +371,7 @@ export function buildChartOptions({
                     seriesIndex: 0,
                     dataPointIndex: values.length - 1,
                     fillColor: isBtcPriceTrend ? "#0B0F14" : "#081310",
-                    strokeColor: isBtcPriceTrend ? "#00E5A8" : "#58ffd6",
+                    strokeColor: isBtcPriceTrend ? marketTrendLineColor : "#58ffd6",
                     size: isBtcPriceTrend ? 6 : 6,
                   },
                 ]
@@ -298,7 +383,7 @@ export function buildChartOptions({
         }
       : { size: 0 },
     dataLabels: {
-      enabled: isDailyPnlColumn || isVolumeProfile || isPortfolioBreakdown,
+      enabled: isDailyPnlColumn || isPortfolioBreakdown,
       formatter: isDailyPnlColumn
         ? (value: number) => `${value > 0 ? "+" : ""}${Math.round(value)}`
         : isVolumeProfile
@@ -307,42 +392,39 @@ export function buildChartOptions({
             ? (value: number) => `${Math.round(value)}%`
             : undefined,
       offsetY: isDailyPnlColumn ? -16 : isPortfolioBreakdown ? 2 : 0,
-      offsetX: isVolumeProfile ? -8 : undefined,
       background: {
         enabled: false,
       },
       style: {
         fontSize: isDailyPnlColumn
           ? "12px"
-          : isVolumeProfile
-            ? "11px"
-            : isPortfolioBreakdown
+          : isPortfolioBreakdown
               ? "12px"
               : undefined,
         fontWeight:
-          isDailyPnlColumn || isVolumeProfile || isPortfolioBreakdown
+          isDailyPnlColumn || isPortfolioBreakdown
             ? 700
             : undefined,
         colors: isDailyPnlColumn
           ? dailyPnlLabelColors
-          : isVolumeProfile
-            ? volumeProfileLabelColors
-            : isPortfolioBreakdown
+          : isPortfolioBreakdown
               ? ["#f8fafc"]
               : undefined,
       },
       dropShadow: undefined,
     },
-    states: isLineChart
+    states: isLineChart || isVolumeProfile
       ? {
           hover: {
             filter: {
-              type: "none",
+              type: isVolumeProfile ? "lighten" : "none",
+              ...(isVolumeProfile ? { value: 0.08 } : {}),
             },
           },
           active: {
             filter: {
-              type: "none",
+              type: isVolumeProfile ? "lighten" : "none",
+              ...(isVolumeProfile ? { value: 0.04 } : {}),
             },
           },
         }
@@ -370,6 +452,23 @@ export function buildChartOptions({
             );
             return `<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(11,15,20,0.96);box-shadow:0 18px 42px rgba(0,0,0,0.42);color:#f8fafc;font-size:12px;line-height:1.35;"><div style="color:rgba(226,232,240,0.62);font-size:11px;margin-bottom:2px;">${label}</div><div style="font-weight:600;letter-spacing:0.01em;">$${value.toLocaleString()}</div></div>`;
           }
+        : isVolumeProfile
+          ? ({ series, seriesIndex, dataPointIndex, w }) => {
+              const label = w.globals.categoryLabels?.[dataPointIndex] ?? "";
+              const rawValue = Number(
+                series[seriesIndex]?.[dataPointIndex] ?? 0,
+              );
+              const direction =
+                volumeProfileDirections?.[dataPointIndex] === "bearish"
+                  ? "Bearish"
+                  : "Bullish";
+              const accentColor =
+                volumeProfileDirections?.[dataPointIndex] === "bearish"
+                  ? "#fb7185"
+                  : "#2ae6bd";
+
+              return `<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(11,15,20,0.96);box-shadow:0 18px 42px rgba(0,0,0,0.42);color:#f8fafc;font-size:12px;line-height:1.4;"><div style="color:rgba(226,232,240,0.62);font-size:11px;margin-bottom:4px;">Time: ${label}</div><div style="font-weight:600;letter-spacing:0.01em;margin-bottom:3px;">Volume: ${rawValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div><div style="color:${accentColor};font-size:11px;font-weight:600;">Direction: ${direction}</div></div>`;
+            }
         : isPortfolioBreakdown
           ? ({ series, seriesIndex, w }) => {
               const label = w.globals.labels?.[seriesIndex] ?? "";
@@ -394,15 +493,15 @@ export function buildChartOptions({
     },
     grid: isCartesianChart
       ? {
-          show: true,
+          show: !isVolumeProfile,
           borderColor: isLineChart
             ? isBtcPriceTrend
-              ? "rgba(255,255,255,0.09)"
+              ? marketTrendGridColor
               : "rgba(122, 255, 223, 0.24)"
             : isDailyPnlColumn
               ? "rgba(148, 163, 184, 0.12)"
               : isVolumeProfile
-                ? "rgba(120, 164, 151, 0.14)"
+                ? "rgba(120, 164, 151, 0.08)"
                 : isColumnChart
                   ? "rgba(63, 216, 175, 0.12)"
                   : "rgba(148, 163, 184, 0.16)",
@@ -410,7 +509,9 @@ export function buildChartOptions({
             isLineChart || isDailyPnlColumn || isVolumeProfile
               ? isBtcPriceTrend
                 ? 4
-                : 3
+                : isVolumeProfile
+                  ? 2
+                  : 3
               : 0,
           xaxis: {
             lines: {
@@ -439,11 +540,11 @@ export function buildChartOptions({
               }
             : isVolumeProfile
               ? {
-                  top: 10,
-                  right: 10,
-                  bottom: 6,
-                  left: 10,
-                }
+                top: 8,
+                right: 10,
+                bottom: 4,
+                left: 10,
+              }
               : isBtcPriceTrend
                 ? {
                     top: 0,
@@ -484,7 +585,7 @@ export function buildChartOptions({
             },
           },
           labels: {
-            show: true,
+            show: !isVolumeProfile,
             offsetY: isDailyPnlColumn ? -2 : undefined,
             style: {
               colors: isLineChart
@@ -550,7 +651,7 @@ export function buildChartOptions({
             show: false,
           },
           labels: {
-            show: isBtcPriceTrend || isDailyPnlColumn || isVolumeProfile,
+            show: isBtcPriceTrend || isDailyPnlColumn,
             formatter: isLineChart
               ? isBtcPriceTrend
                 ? (value: number) => `$${Math.round(value).toLocaleString()}`
@@ -630,7 +731,7 @@ export function buildChartOptions({
       bar: {
         horizontal: isBarChart,
         borderRadius: isVolumeProfile
-          ? 7
+          ? 5
           : isColumnChart
             ? isDailyPnlColumn
               ? 6
@@ -647,30 +748,34 @@ export function buildChartOptions({
                 position: "center",
               }
             : undefined,
-        columnWidth: isColumnChart
-          ? isDailyPnlColumn
-            ? "80%"
-            : "62%"
-          : undefined,
-        barHeight: isVolumeProfile ? "66%" : isBarChart ? "82%" : undefined,
+        columnWidth: isVolumeProfile
+          ? "70%"
+          : isColumnChart
+            ? isDailyPnlColumn
+              ? "80%"
+              : "62%"
+            : undefined,
+        barHeight: isVolumeProfile ? "84%" : isBarChart ? "82%" : undefined,
         distributed: isDailyPnlColumn || isVolumeProfile,
         colors:
-          isColumnChart && !isDailyPnlColumn
+          (isColumnChart || isVolumeProfile) && !isDailyPnlColumn
             ? {
-                ranges: [
-                  {
-                    from: 0,
-                    to: Number.POSITIVE_INFINITY,
-                    color: isVolumeProfile ? "#4ed9b6" : "#58ffd6",
-                  },
-                  {
-                    from: Number.NEGATIVE_INFINITY,
-                    to: -0.00001,
-                    color: isVolumeProfile ? "#4ed9b6" : "#7f1d1d",
-                  },
-                ],
+                ranges: isVolumeProfile
+                  ? undefined
+                  : [
+                      {
+                        from: 0,
+                        to: Number.POSITIVE_INFINITY,
+                        color: "#58ffd6",
+                      },
+                      {
+                        from: Number.NEGATIVE_INFINITY,
+                        to: -0.00001,
+                        color: "#7f1d1d",
+                      },
+                    ],
                 backgroundBarColors: isVolumeProfile
-                  ? ["rgba(255,255,255,0.035)"]
+                  ? []
                   : undefined,
                 backgroundBarOpacity: isVolumeProfile ? 1 : 0,
                 backgroundBarRadius: isVolumeProfile ? 7 : 0,
@@ -699,10 +804,10 @@ export function buildChartOptions({
                   : "rgba(120, 255, 221, 0.28)",
               ],
             }
-          : isVolumeProfile
+        : isVolumeProfile
             ? {
                 width: 1,
-                colors: ["rgba(214, 255, 245, 0.16)"],
+                colors: ["rgba(240,255,251,0.08)"],
               }
             : undefined,
     legend: {

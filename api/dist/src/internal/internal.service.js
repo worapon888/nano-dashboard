@@ -54,16 +54,11 @@ let InternalService = InternalService_1 = class InternalService {
         }
     }
     async getRedisHealth() {
-        if (!this.redisService?.getClient) {
+        if (!this.redisService) {
             return 'unknown';
         }
         try {
-            const client = this.redisService.getClient();
-            if (!client) {
-                return 'unknown';
-            }
-            await client.ping();
-            return 'up';
+            return (await this.redisService.ping()) ? 'up' : 'down';
         }
         catch (error) {
             this.logger.warn(`Redis health check failed: ${error instanceof Error ? error.message : 'unknown error'}`);

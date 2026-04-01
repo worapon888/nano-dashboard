@@ -1,75 +1,138 @@
-generator client {
-provider = "prisma-client-js"
-}
+# Database Design
 
-datasource db {
-provider = "postgresql"
-url = env("DATABASE_URL")
-}
+PostgreSQL schema จัดการผ่าน Prisma ประกอบด้วย 4 model โดยแต่ละ model มีบทบาทในระบบไม่เท่ากัน
 
-enum UserRole {
-USER
-ADMIN
-}
+---
 
-enum PriceSource {
-BINANCE
-}
+## ภาพรวม: สองโดเมนที่แยกกันชัด
 
-model User {
-id String @id @default(uuid()) @db.Uuid
-email String @unique @db.VarChar(255)
-passwordHash String @map("password_hash") @db.Text
-displayName String @map("display_name") @db.VarChar(100)
-role UserRole @default(USER)
-isActive Boolean @default(true) @map("is_active")
-createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+| โดเมน              | Model                            | สถานะ                      |
+| ------------------ | -------------------------------- | -------------------------- |
+| Application data   | `users`, `orders`                | Runtime-active ใช้งานจริง  |
+| Market persistence | `crypto_prices`, `price_history` | มีใน schema แต่ใช้แค่ seed |
 
-@@index([role], map: "users_role_idx")
-@@index([isActive], map: "users_active_idx")
-@@index([deletedAt], map: "users_deleted_at_idx")
-@@map("users")
-}
+> **หมายเหตุ:** dashboard ณ ปัจจุบันดึงข้อมูลตลาดจาก Binance API + Redis cache ไม่ใช่จาก `crypto_prices` หรือ `price_history` โดยตรง
 
-model CryptoPrice {
-id String @id @default(uuid()) @db.Uuid
-symbol String @unique @db.VarChar(20)
-price Decimal @db.Decimal(20, 8)
-volume24h Decimal? @map("volume_24h") @db.Decimal(24, 8)
-priceChange24h Decimal? @map("price_change_24h") @db.Decimal(20, 8)
-high24h Decimal? @map("high_24h") @db.Decimal(20, 8)
-low24h Decimal? @map("low_24h") @db.Decimal(20, 8)
-source PriceSource @default(BINANCE)
-fetchedAt DateTime @map("fetched_at") @db.Timestamptz(6)
-createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+---
 
-priceHistories PriceHistory[]
+## Models
 
-@@index([fetchedAt], map: "crypto_prices_fetched_at_idx")
-@@index([symbol, fetchedAt], map: "crypto_prices_symbol_fetched_at_idx")
-@@map("crypto_prices")
-}
+### `users`
 
-model PriceHistory {
-id String @id @default(uuid()) @db.Uuid
-cryptoPriceId String @map("crypto_price_id") @db.Uuid
-symbol String @db.VarChar(20)
-price Decimal @db.Decimal(20, 8)
-volume24h Decimal? @map("volume_24h") @db.Decimal(24, 8)
-priceChange24h Decimal? @map("price_change_24h") @db.Decimal(20, 8)
-high24h Decimal? @map("high_24h") @db.Decimal(20, 8)
-low24h Decimal? @map("low_24h") @db.Decimal(20, 8)
-source PriceSource @default(BINANCE)
-recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
-createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+เก็บข้อมูล user สำหรับ authentication, authorization, และ admin management
 
-cryptoPrice CryptoPrice @relation(fields: [cryptoPriceId], references: [id], onDelete: Cascade)
+```
+id             String      PK
+email          String      UNIQUE
+passwordHash   String
+displayName    String
+role           UserRole    USER | ADMIN
+isActive       Boolean
+createdAt      DateTime
+updatedAt      DateTime
+deletedAt      DateTime?   nullable — soft delete
+```
 
-@@index([cryptoPriceId], map: "price_history_crypto_price_id_idx")
-@@index([symbol, recordedAt], map: "price_history_symbol_recorded_at_idx")
-@@index([recordedAt], map: "price_history_recorded_at_idx")
-@@map("price_history")
-}
+**Runtime usage:** ใช้งานหนักที่สุดในระบบ — login, JWT lookup, admin CRUD, active user count สำหรับ dashboard summary
+
+**Soft delete:** ใช้ `deletedAt` — record ยังอยู่ใน DB แต่ query ส่วนใหญ่ filter `deletedAt: null`
+
+---
+
+### `orders`
+
+เก็บ order ของ user สำหรับ dashboard open-orders widget
+
+```
+id             String      PK
+userId         String      FK -> users.id
+pair           String
+side           OrderSide   BUY | SELL
+type           OrderType   LIMIT | MARKET | STOP | TAKE_PROFIT
+price          Decimal
+amount         Decimal
+filledPercent  Decimal
+totalUsd       Decimal
+status         OrderStatus OPEN | PARTIAL | FILLED | CANCELLED
+createdAt      DateTime
+updatedAt      DateTime
+```
+
+**Runtime usage:** `OrdersService` query จาก DB จริง แต่ demo path อาศัย seeded rows ของ `admin@example.com` เป็นหลัก — ยังไม่มี order creation/update API
+
+---
+
+### `crypto_prices`
+
+เก็บ price snapshot ล่าสุดแต่ละ symbol
+
+```
+id              String    PK
+symbol          String    UNIQUE
+price           Decimal
+volume24h       Decimal
+priceChange24h  Decimal
+high24h         Decimal
+low24h          Decimal
+source          String
+fetchedAt       DateTime
+createdAt       DateTime
+updatedAt       DateTime
+```
+
+**Runtime usage:** มีใน schema และ seed (BTCUSDT, ETHUSDT) แต่ dashboard ไม่ได้ query table นี้ที่ runtime — live market data ไหลผ่าน Binance + Redis แทน
+
+---
+
+### `price_history`
+
+เก็บ historical snapshot ที่ผูกกับ `crypto_prices`
+
+```
+id              String    PK
+cryptoPriceId   String    FK -> crypto_prices.id
+symbol          String
+price           Decimal
+volume24h       Decimal
+priceChange24h  Decimal
+high24h         Decimal
+low24h          Decimal
+source          String
+recordedAt      DateTime
+createdAt       DateTime
+```
+
+**Runtime usage:** seed เท่านั้น — dashboard trend chart ดึงข้อมูลจาก Binance kline API โดยตรง ไม่ผ่าน table นี้
+
+---
+
+## Relationships
+
+```
+users ──── 1:many ──── orders
+             (orders.userId → users.id, cascade delete/update)
+
+crypto_prices ──── 1:many ──── price_history
+             (price_history.cryptoPriceId → crypto_prices.id, cascade delete/update)
+```
+
+---
+
+## Data Sources ณ Runtime
+
+```
+DB-backed          users, orders
+Cache-backed       active user count, ticker cache, dashboard summary cache
+External API       top movers, BTC price trend, volume profile
+Demo/generated     PNL series
+```
+
+---
+
+## สิ่งที่ยังไม่มีใน Schema
+
+- PNL model (ปัจจุบัน service-generated)
+- Session / refresh token table
+- Portfolio หรือ position model
+- Dashboard summary persistence
+- WebSocket event store

@@ -14,6 +14,7 @@ const binance_module_1 = require("./binance/binance.module");
 const dashboard_module_1 = require("./dashboard/dashboard.module");
 const events_module_1 = require("./events/events.module");
 const market_data_module_1 = require("./market-data/market-data.module");
+const orders_module_1 = require("./orders/orders.module");
 const prisma_module_1 = require("./prisma/prisma.module");
 const redis_module_1 = require("./redis/redis.module");
 const users_module_1 = require("./users/users.module");
@@ -31,6 +32,7 @@ exports.AppModule = AppModule = __decorate([
             auth_module_1.AuthModule,
             binance_module_1.BinanceModule,
             market_data_module_1.MarketDataModule,
+            orders_module_1.OrdersModule,
             dashboard_module_1.DashboardModule,
         ],
     })

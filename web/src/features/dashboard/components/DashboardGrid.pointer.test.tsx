@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import DashboardGrid from './DashboardGrid'
 import { tradingDashboardDefinition } from '../data/dashboardDefinition'
 import TradingTable from '../../table/components/TradingTable'
-import { ordersMock } from '../../table/data/orders.mock'
+import { openOrdersSummaryMock } from '../../table/data/orders.mock'
 
 vi.mock('../../../shared/hooks/useResizeObserver', () => ({
   default: () => ({
@@ -107,7 +107,7 @@ describe('DashboardGrid pointer interactions', () => {
 
     expectNoOverlap([
       'BTC Price Trend',
-      'Portfolio Breakdown',
+      'Market Share Breakdown',
       'Volume Profile',
       'Daily PNL',
       'Open Orders',
@@ -156,7 +156,7 @@ describe('DashboardGrid pointer interactions', () => {
 
     expectNoOverlap([
       'BTC Price Trend',
-      'Portfolio Breakdown',
+      'Market Share Breakdown',
       'Volume Profile',
       'Daily PNL',
       'Open Orders',
@@ -222,7 +222,7 @@ describe('DashboardGrid pointer interactions', () => {
 
     const titles = [
       'BTC Price Trend',
-      'Portfolio Breakdown',
+      'Market Share Breakdown',
       'Volume Profile',
       'Daily PNL',
       'Open Orders',
@@ -246,7 +246,7 @@ describe('DashboardGrid pointer interactions', () => {
 
 describe('TradingTable pointer column resizing', () => {
   it('resizes a column via pointer events and keeps the table intact', async () => {
-    render(<TradingTable title="Open Orders" rows={ordersMock} />)
+    render(<TradingTable title="Open Orders" data={openOrdersSummaryMock} />)
 
     const pairHeader = screen.getAllByText('Pair')[0]?.closest('th')
 

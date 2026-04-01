@@ -1,9 +1,9 @@
-import { Fragment, memo, useState, type CSSProperties } from 'react'
+import { memo, type CSSProperties } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import WidgetShell from '../../../shared/components/WidgetShell'
 import useColumnResize from '../hooks/useColumnResize'
-import type { OrderRow } from '../../../shared/types/widget'
 import type { ResizeDirection } from '../../../shared/types/resize'
+import type { OpenOrderItem, OpenOrdersSummary } from '../../../types/dashboard'
 
 // ─── Column definitions ──────────────────────────────────────────────────────
 
@@ -17,18 +17,17 @@ type ColumnDef = {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: 'symbol',    label: 'Pair',         defaultWidth: 110, align: 'left'   },
+  { key: 'pair',      label: 'Pair',         defaultWidth: 110, align: 'left'   },
   { key: 'side',      label: 'Side',         defaultWidth: 76,  align: 'left'   },
   { key: 'type',      label: 'Type',         defaultWidth: 104, align: 'left'   },
   { key: 'price',     label: 'Price',        defaultWidth: 130, align: 'right'  },
   { key: 'amount',    label: 'Amount',       defaultWidth: 108, align: 'right'  },
-  { key: 'filledPct', label: 'Filled',       defaultWidth: 128, align: 'right'  },
-  { key: 'total',     label: 'Total (USDT)', defaultWidth: 140, align: 'right'  },
+  { key: 'filledPercent', label: 'Filled',   defaultWidth: 128, align: 'right'  },
+  { key: 'totalUsd',  label: 'Total (USDT)', defaultWidth: 140, align: 'right'  },
   { key: 'status',    label: 'Status',       defaultWidth: 100, align: 'left'   },
-  { key: 'createdAt', label: 'Time',         defaultWidth: 138, align: 'left'   },
+  { key: 'createdAtLabel', label: 'Time',    defaultWidth: 138, align: 'left'   },
 ]
 
-const EXPAND_COL_WIDTH = 40
 const COL_MIN_WIDTH = 60
 
 const INITIAL_WIDTHS: Record<string, number> = Object.fromEntries(
@@ -60,8 +59,12 @@ function formatAmount(amount: number): string {
   return amount.toFixed(2)
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
+function formatUpdatedAtLabel(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown update'
+  }
+  return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -72,12 +75,12 @@ function formatDateTime(iso: string): string {
 
 // ─── Atoms ───────────────────────────────────────────────────────────────────
 
-function SideBadge({ side }: { side: OrderRow['side'] }) {
+function SideBadge({ side }: { side: OpenOrderItem['side'] }) {
   return (
     <span
       className={[
         'inline-flex items-center rounded px-1.5 py-0.5 text-[0.66rem] font-bold uppercase tracking-[0.1em]',
-        side === 'buy'
+        side === 'BUY'
           ? 'bg-emerald-400/10 text-emerald-300'
           : 'bg-rose-400/10 text-rose-300',
       ].join(' ')}
@@ -87,14 +90,14 @@ function SideBadge({ side }: { side: OrderRow['side'] }) {
   )
 }
 
-function TypeBadge({ type }: { type: OrderRow['type'] }) {
-  const cfg: Record<OrderRow['type'], { label: string; cls: string }> = {
-    market:        { label: 'Market', cls: 'bg-slate-600/20 text-slate-400'  },
-    limit:         { label: 'Limit',  cls: 'bg-sky-400/10  text-sky-300'     },
-    'stop-limit':  { label: 'Stop',   cls: 'bg-amber-400/10 text-amber-300'  },
-    'take-profit': { label: 'TP',     cls: 'bg-teal-400/10  text-teal-300'   },
+function TypeBadge({ type }: { type: OpenOrderItem['type'] }) {
+  const cfg: Record<string, { label: string; cls: string }> = {
+    Market: { label: 'Market', cls: 'bg-slate-600/20 text-slate-400' },
+    Limit: { label: 'Limit', cls: 'bg-sky-400/10  text-sky-300' },
+    Stop: { label: 'Stop', cls: 'bg-amber-400/10 text-amber-300' },
+    TP: { label: 'TP', cls: 'bg-teal-400/10  text-teal-300' },
   }
-  const { label, cls } = cfg[type]
+  const { label, cls } = cfg[type] ?? { label: type, cls: 'bg-white/10 text-slate-300' }
   return (
     <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[0.66rem] font-medium ${cls}`}>
       {label}
@@ -102,12 +105,12 @@ function TypeBadge({ type }: { type: OrderRow['type'] }) {
   )
 }
 
-function StatusBadge({ status }: { status: OrderRow['status'] }) {
-  const cfg: Record<OrderRow['status'], { label: string; textCls: string; dotCls: string }> = {
-    open:      { label: 'Open',      textCls: 'text-emerald-300',  dotCls: 'bg-emerald-400'    },
-    partial:   { label: 'Partial',   textCls: 'text-amber-300',    dotCls: 'bg-amber-400'      },
-    filled:    { label: 'Filled',    textCls: 'text-slate-300',    dotCls: 'bg-slate-400'      },
-    cancelled: { label: 'Cancelled', textCls: 'text-rose-400/60',  dotCls: 'bg-rose-400/50'    },
+function StatusBadge({ status }: { status: OpenOrderItem['status'] }) {
+  const cfg: Record<OpenOrderItem['status'], { label: string; textCls: string; dotCls: string }> = {
+    Open: { label: 'Open', textCls: 'text-emerald-300', dotCls: 'bg-emerald-400' },
+    Partial: { label: 'Partial', textCls: 'text-amber-300', dotCls: 'bg-amber-400' },
+    Filled: { label: 'Filled', textCls: 'text-slate-300', dotCls: 'bg-slate-400' },
+    Cancelled: { label: 'Cancelled', textCls: 'text-rose-400/60', dotCls: 'bg-rose-400/50' },
   }
   const { label, textCls, dotCls } = cfg[status]
   return (
@@ -118,8 +121,8 @@ function StatusBadge({ status }: { status: OrderRow['status'] }) {
   )
 }
 
-function FilledBar({ filledPct }: { filledPct: number }) {
-  const pct = Math.min(100, Math.max(0, filledPct))
+function FilledBar({ filledPercent }: { filledPercent: number }) {
+  const pct = Math.min(100, Math.max(0, filledPercent))
   const barCls =
     pct === 100 ? 'bg-emerald-400' : pct === 0 ? 'bg-white/10' : 'bg-amber-400'
   const label =
@@ -198,177 +201,23 @@ function ResizableColumnHeader({
   )
 }
 
-// ─── ExpandableRowContent ────────────────────────────────────────────────────
-
-function DetailField({
-  label,
-  value,
-  mono = false,
-  cls = 'text-slate-200',
-}: {
-  label: string
-  value: string
-  mono?: boolean
-  cls?: string
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[0.63rem] uppercase tracking-[0.22em] text-slate-600">{label}</div>
-      <div
-        className={[
-          'mt-0.5 truncate text-[0.78rem] font-medium',
-          mono ? 'font-mono' : '',
-          cls,
-        ].join(' ')}
-      >
-        {value}
-      </div>
-    </div>
-  )
-}
-
-type ExpandableRowContentProps = {
-  row: OrderRow
-  isExpanded: boolean
-  colSpan: number
-  panelId: string
-  triggerId: string
-}
-
-function ExpandableRowContent({
-  row,
-  isExpanded,
-  colSpan,
-  panelId,
-  triggerId,
-}: ExpandableRowContentProps) {
-  const baseCurrency = row.symbol.split('/')[0] ?? ''
-
-  return (
-    <tr aria-hidden={!isExpanded} className={isExpanded ? '' : 'pointer-events-none'}>
-      <td colSpan={colSpan} className="p-0">
-        {/*
-         * CSS grid trick: grid-template-rows animates from 0fr → 1fr,
-         * giving smooth height expansion without knowing the content height.
-         */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateRows: isExpanded ? '1fr' : '0fr',
-            transition: 'grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
-        >
-          <div
-            id={panelId}
-            role="region"
-            aria-labelledby={triggerId}
-            style={{
-              overflow: 'hidden',
-              opacity: isExpanded ? 1 : 0,
-              transition: 'opacity 180ms ease 80ms',
-            }}
-          >
-            <div className="border-b border-white/6 bg-[#080808] px-4 py-4 pl-12">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                <DetailField label="Order ID" value={row.id} mono />
-                <DetailField
-                  label="Avg Fill Price"
-                  value={row.averagePrice > 0 ? `$${formatPrice(row.averagePrice)}` : '—'}
-                />
-                {row.stopPrice != null ? (
-                  <DetailField
-                    label="Stop Price"
-                    value={`$${formatPrice(row.stopPrice)}`}
-                    cls="text-amber-300"
-                  />
-                ) : null}
-                <DetailField
-                  label="Fee Paid"
-                  value={row.fee > 0 ? `$${row.fee.toFixed(4)}` : '—'}
-                />
-                <DetailField
-                  label={`Filled (${baseCurrency})`}
-                  value={row.filled > 0 ? formatAmount(row.filled) : '—'}
-                />
-                <DetailField label="Last Update" value={formatDateTime(row.updatedAt)} />
-              </div>
-
-              {row.notes ? (
-                <div className="mt-3 border-t border-white/5 pt-3">
-                  <p className="text-[0.64rem] uppercase tracking-[0.22em] text-slate-600">
-                    Note
-                  </p>
-                  <p className="mt-1 text-[0.78rem] italic text-slate-400">{row.notes}</p>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </td>
-    </tr>
-  )
-}
-
-// ─── TableRow ────────────────────────────────────────────────────────────────
-
 type TableRowProps = {
-  row: OrderRow
+  row: OpenOrderItem
   columns: ColumnDef[]
-  isExpanded: boolean
-  onToggle: () => void
-  detailPanelId: string
-  triggerId: string
 }
 
 const TableRow = memo(function TableRow({
   row,
   columns,
-  isExpanded,
-  onToggle,
-  detailPanelId,
-  triggerId,
 }: TableRowProps) {
   return (
     <tr
       className={[
         'group/row border-b border-white/[0.04]',
         'outline-none transition-colors duration-100',
-        isExpanded ? 'bg-white/[0.045]' : 'hover:bg-white/[0.025] active:bg-white/[0.04]',
+        'hover:bg-white/[0.025] active:bg-white/[0.04]',
       ].join(' ')}
     >
-      {/* ── Expand chevron ─── */}
-      <td className="w-10 py-2.5 pl-3 pr-1">
-        <button
-          id={triggerId}
-          type="button"
-          aria-expanded={isExpanded}
-          aria-controls={detailPanelId}
-          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${row.symbol}`}
-          onClick={onToggle}
-          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full outline-none transition-colors hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-emerald-400/60"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-            className={[
-              'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
-              isExpanded
-                ? 'rotate-90 text-slate-300'
-                : 'text-slate-600 group-hover/row:text-slate-400',
-            ].join(' ')}
-          >
-            <path
-              d="M6 3l5 5-5 5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </td>
-
       {columns.map((col) => {
         const alignCls =
           col.align === 'right'
@@ -379,9 +228,9 @@ const TableRow = memo(function TableRow({
 
         let cell: React.ReactNode
 
-        if (col.key === 'symbol') {
+        if (col.key === 'pair') {
           cell = (
-            <span className="font-medium tracking-wide text-slate-100">{row.symbol}</span>
+            <span className="font-medium tracking-wide text-slate-100">{row.pair}</span>
           )
         } else if (col.key === 'side') {
           cell = <SideBadge side={row.side} />
@@ -395,12 +244,12 @@ const TableRow = memo(function TableRow({
           cell = (
             <span className="tabular-nums text-slate-300">{formatAmount(row.amount)}</span>
           )
-        } else if (col.key === 'filledPct') {
-          cell = <FilledBar filledPct={row.filledPct} />
-        } else if (col.key === 'total') {
+        } else if (col.key === 'filledPercent') {
+          cell = <FilledBar filledPercent={row.filledPercent} />
+        } else if (col.key === 'totalUsd') {
           cell = (
             <span className="tabular-nums text-slate-200">
-              ${row.total.toLocaleString('en-US', {
+              ${row.totalUsd.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -408,9 +257,9 @@ const TableRow = memo(function TableRow({
           )
         } else if (col.key === 'status') {
           cell = <StatusBadge status={row.status} />
-        } else if (col.key === 'createdAt') {
+        } else if (col.key === 'createdAtLabel') {
           cell = (
-            <span className="text-[0.73rem] text-slate-500">{formatDateTime(row.createdAt)}</span>
+            <span className="text-[0.73rem] text-slate-500">{row.createdAtLabel}</span>
           )
         }
 
@@ -434,21 +283,18 @@ const TableRow = memo(function TableRow({
 // ─── TableContainer ───────────────────────────────────────────────────────────
 
 type TableContainerProps = {
-  rows: OrderRow[]
+  rows: OpenOrderItem[]
   isWidgetResizing: boolean
 }
 
 function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
-
   const { columnWidths, resizingColumn, startResize, resetColumnWidth } = useColumnResize({
     initialWidths: INITIAL_WIDTHS,
     minWidth: COL_MIN_WIDTH,
     storageKey: STORAGE_KEY,
   })
 
-  const totalMinWidth =
-    EXPAND_COL_WIDTH + COLUMNS.reduce((sum, col) => sum + columnWidths[col.key], 0)
+  const totalMinWidth = COLUMNS.reduce((sum, col) => sum + columnWidths[col.key], 0)
   const tableColumnStyle = {
     ...Object.fromEntries(
       COLUMNS.map((col) => [getColumnWidthVarName(col.key), `${columnWidths[col.key]}px`]),
@@ -458,11 +304,7 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
     minWidth: totalMinWidth,
   } as CSSProperties
 
-  const colSpan = COLUMNS.length + 1
-
-  function handleToggle(rowId: string) {
-    setExpandedRowId((prev) => (prev === rowId ? null : rowId))
-  }
+  const colSpan = COLUMNS.length
 
   return (
     /*
@@ -479,8 +321,6 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
         style={tableColumnStyle}
       >
         <colgroup>
-          {/* Expand-chevron column */}
-          <col style={{ width: EXPAND_COL_WIDTH }} />
           {COLUMNS.map((col) => (
             <col key={col.key} style={{ width: `var(${getColumnWidthVarName(col.key)})` }} />
           ))}
@@ -489,11 +329,6 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
         {/* ── TableHeader ──────────────────────────────────────────────── */}
         <thead>
           <tr>
-            <th
-              scope="col"
-              style={{ width: EXPAND_COL_WIDTH }}
-              className="sticky top-0 z-10 border-b border-white/6 bg-[#0c0c0c]"
-            />
             {COLUMNS.map((col) => (
               <ResizableColumnHeader
                 key={col.key}
@@ -509,30 +344,9 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
 
         {/* ── TableBody ────────────────────────────────────────────────── */}
         <tbody>
-          {rows.map((row) => {
-            const detailPanelId = `order-details-${row.id}`
-            const triggerId = `order-toggle-${row.id}`
-
-            return (
-              <Fragment key={row.id}>
-                <TableRow
-                  row={row}
-                  columns={COLUMNS}
-                  isExpanded={expandedRowId === row.id}
-                  onToggle={() => handleToggle(row.id)}
-                  detailPanelId={detailPanelId}
-                  triggerId={triggerId}
-                />
-                <ExpandableRowContent
-                  row={row}
-                  isExpanded={expandedRowId === row.id}
-                  colSpan={colSpan}
-                  panelId={detailPanelId}
-                  triggerId={triggerId}
-                />
-              </Fragment>
-            )
-          })}
+          {rows.map((row) => (
+            <TableRow key={row.id} row={row} columns={COLUMNS} />
+          ))}
 
           {rows.length === 0 ? (
             <tr>
@@ -551,7 +365,9 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
 
 export type TradingTableProps = {
   title: string
-  rows: OrderRow[]
+  data?: OpenOrdersSummary | null
+  loading?: boolean
+  error?: string | null
   isMinimized?: boolean
   isMaximized?: boolean
   isDragging?: boolean
@@ -568,7 +384,9 @@ export type TradingTableProps = {
 
 function TradingTable({
   title,
-  rows,
+  data = null,
+  loading = false,
+  error = null,
   isMinimized = false,
   isMaximized = false,
   isDragging = false,
@@ -584,31 +402,49 @@ function TradingTable({
     e.stopPropagation()
   }
 
-  const activeCount = rows.filter(
-    (r) => r.status === 'open' || r.status === 'partial',
-  ).length
+  function handleControlPointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    action?: () => void,
+  ) {
+    stopEvent(event)
+    action?.()
+  }
+
+  function handleKeyboardClick(
+    event: ReactPointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>,
+    action?: () => void,
+  ) {
+    if (event.detail === 0) {
+      action?.()
+    }
+  }
+  const summary = data
+  const activeCount = summary?.activeCount ?? 0
+  const totalCount = summary?.totalCount ?? 0
+  const orderItems = summary?.items ?? []
+  const updatedAtLabel = summary ? formatUpdatedAtLabel(summary.updatedAt) : null
 
   const windowControls = (
     <div className="flex items-center gap-2">
       <button
         type="button"
         aria-label={isMinimized ? `Restore ${title}` : `Minimize ${title}`}
-        onPointerDown={stopEvent}
-        onClick={onMinimizeToggle}
+        onPointerDown={(event) => handleControlPointerDown(event, onMinimizeToggle)}
+        onClick={(event) => handleKeyboardClick(event, onMinimizeToggle)}
         className="h-3 w-3 rounded-full bg-rose-500/90 transition hover:bg-rose-400"
       />
       <button
         type="button"
         aria-label={`Reset ${title} to default size`}
-        onPointerDown={stopEvent}
-        onClick={onResetToDefault}
+        onPointerDown={(event) => handleControlPointerDown(event, onResetToDefault)}
+        onClick={(event) => handleKeyboardClick(event, onResetToDefault)}
         className="h-3 w-3 rounded-full bg-amber-400/90 transition hover:bg-amber-300"
       />
       <button
         type="button"
         aria-label={isMaximized ? `Restore ${title}` : `Maximize ${title}`}
-        onPointerDown={stopEvent}
-        onClick={onMaximizeToggle}
+        onPointerDown={(event) => handleControlPointerDown(event, onMaximizeToggle)}
+        onClick={(event) => handleKeyboardClick(event, onMaximizeToggle)}
         className="h-3 w-3 rounded-full bg-emerald-500/90 transition hover:bg-emerald-400"
       />
     </div>
@@ -617,7 +453,7 @@ function TradingTable({
   return (
     <WidgetShell
       title={title}
-      subtitle={`${activeCount} active · ${rows.length} total`}
+      subtitle={`${activeCount} active · ${totalCount} total`}
       action={windowControls}
       className={`relative flex h-full flex-col ${isDragging || isResizing ? 'select-none' : ''}`}
       headerClassName={onDragPointerDown ? 'cursor-grab active:cursor-grabbing' : ''}
@@ -631,7 +467,30 @@ function TradingTable({
       }
     >
       {!isMinimized ? (
-        <TableContainer rows={rows} isWidgetResizing={isResizing} />
+        loading && orderItems.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-6 text-sm text-slate-500">
+            Loading open orders...
+          </div>
+        ) : error && orderItems.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-rose-300/80">
+            {error}
+          </div>
+        ) : orderItems.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-6 text-sm text-slate-500">
+            No open orders available
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col">
+            {updatedAtLabel ? (
+              <div className="border-b border-white/6 px-4 py-2 text-[0.66rem] uppercase tracking-[0.2em] text-slate-500">
+                Updated {updatedAtLabel}
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1">
+              <TableContainer rows={orderItems} isWidgetResizing={isResizing} />
+            </div>
+          </div>
+        )
       ) : null}
     </WidgetShell>
   )

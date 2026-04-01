@@ -5,6 +5,7 @@ import { BinanceModule } from './binance/binance.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { EventsModule } from './events/events.module';
 import { MarketDataModule } from './market-data/market-data.module';
+import { OrdersModule } from './orders/orders.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { UsersModule } from './users/users.module';
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     BinanceModule,
     MarketDataModule,
+    OrdersModule,
     DashboardModule,
   ],
 })

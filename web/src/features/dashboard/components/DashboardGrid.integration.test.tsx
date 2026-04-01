@@ -59,6 +59,43 @@ function panelsOverlap(leftTitle: string, rightTitle: string) {
 }
 
 describe('DashboardGrid integration interactions', () => {
+  it('keeps a bottom panel minimized after clicking the red control', async () => {
+    render(<DashboardGrid definition={tradingDashboardDefinition} />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('heading', { name: 'Open Orders' }).length).toBeGreaterThan(0)
+    })
+
+    const frameBefore = getPanelFrame('Open Orders')
+    const minimizeButton = within(frameBefore).getByRole('button', {
+      name: 'Minimize Open Orders',
+    })
+
+    fireEvent.pointerDown(minimizeButton, {
+      pointerId: 7,
+      pointerType: 'mouse',
+      isPrimary: true,
+      button: 0,
+      clientX: 1400,
+      clientY: 760,
+    })
+    fireEvent.pointerUp(window, {
+      pointerId: 7,
+      pointerType: 'mouse',
+      isPrimary: true,
+      button: 0,
+      clientX: 1400,
+      clientY: 760,
+    })
+
+    await waitFor(() => {
+      const frameAfter = getPanelFrame('Open Orders')
+
+      expect(within(frameAfter).getByRole('button', { name: 'Restore Open Orders' })).toBeTruthy()
+      expect(Number.parseFloat(frameAfter.style.height)).toBe(76)
+    })
+  })
+
   it('supports pointer drag and resize without breaking layout', async () => {
     render(<DashboardGrid definition={tradingDashboardDefinition} />)
 

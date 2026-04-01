@@ -21,12 +21,12 @@ export declare class UsersService {
     }>;
     findById(id: string): Promise<UserResponseDto>;
     findByEmail(email: string): Promise<{
-        passwordHash: string;
+        id: string;
         email: string;
+        passwordHash: string;
         displayName: string;
         role: import("@prisma/client").$Enums.UserRole;
         isActive: boolean;
-        id: string;
         createdAt: Date;
         updatedAt: Date;
         deletedAt: Date | null;

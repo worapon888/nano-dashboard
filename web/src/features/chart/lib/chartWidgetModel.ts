@@ -123,6 +123,7 @@ function createVariantFlags(
 function createLineTrendMetrics(
   chartType: ChartType,
   normalizedChart: NormalizedChart | null,
+  presentation?: ChartWidgetPresentation,
 ): LineTrendMetrics {
   const primarySeries =
     chartType === 'line' &&
@@ -142,19 +143,26 @@ function createLineTrendMetrics(
     latestValue !== null && firstValue !== null ? latestValue - firstValue : null
   const deltaPercent =
     delta !== null && firstValue ? (delta / firstValue) * 100 : null
-  const isPositive = delta !== null ? delta >= 0 : true
+  const marketTrendData =
+    presentation?.variant === 'market-trend' ? presentation.marketTrendData ?? null : null
+  const displayLatestValue = marketTrendData?.livePrice ?? latestValue
+  const displayDelta = marketTrendData?.change24h ?? delta
+  const displayDeltaPercent = marketTrendData?.change24hPercent ?? deltaPercent
+  const isPositive = displayDelta !== null ? displayDelta >= 0 : true
 
   return {
-    latestValue,
-    delta,
-    deltaPercent,
+    latestValue: displayLatestValue,
+    delta: displayDelta,
+    deltaPercent: displayDeltaPercent,
     isPositive,
     trendColorClass: isPositive ? 'text-[#22C55E]' : 'text-[#ff7b7b]',
     formattedChange:
-      delta !== null ? `${delta > 0 ? '+' : ''}${Math.round(delta).toLocaleString()}` : '--',
+      displayDelta !== null
+        ? `${displayDelta > 0 ? '+' : ''}${Math.round(displayDelta).toLocaleString()}`
+        : '--',
     formattedChangePercent:
-      deltaPercent !== null
-        ? `${deltaPercent > 0 ? '+' : ''}${deltaPercent.toFixed(2)}%`
+      displayDeltaPercent !== null
+        ? `${displayDeltaPercent > 0 ? '+' : ''}${displayDeltaPercent.toFixed(2)}%`
         : '--',
   }
 }
@@ -162,6 +170,7 @@ function createLineTrendMetrics(
 function createDailyPnlMetrics(
   variantFlags: ChartVariantFlags,
   normalizedChart: NormalizedChart | null,
+  presentation?: ChartWidgetPresentation,
 ): DailyPnlMetrics {
   const values =
     variantFlags.isDailyPnlWidget &&
@@ -171,16 +180,23 @@ function createDailyPnlMetrics(
       ? (normalizedChart.apexSeries[0] as CartesianChartSeries).data
       : []
 
+  const dailyPnlData =
+    presentation?.variant === 'daily-pnl' ? presentation.dailyPnlData ?? null : null
   const total = values.reduce((sum, value) => sum + value, 0)
 
   return {
     values,
-    total,
-    positiveDays: values.filter((value) => value > 0).length,
-    negativeDays: values.filter((value) => value < 0).length,
-    strongestValue: values.length > 0 ? Math.max(...values) : null,
-    weakestValue: values.length > 0 ? Math.min(...values) : null,
-    averageValue: values.length > 0 ? total / values.length : null,
+    total: dailyPnlData?.weeklyNet ?? total,
+    positiveDays:
+      dailyPnlData?.win ?? values.filter((value) => value > 0).length,
+    negativeDays:
+      dailyPnlData?.loss ?? values.filter((value) => value < 0).length,
+    strongestValue:
+      dailyPnlData?.best ?? (values.length > 0 ? Math.max(...values) : null),
+    weakestValue:
+      dailyPnlData?.worst ?? (values.length > 0 ? Math.min(...values) : null),
+    averageValue:
+      dailyPnlData?.avg ?? (values.length > 0 ? total / values.length : null),
   }
 }
 
@@ -257,8 +273,12 @@ export function createChartWidgetViewModel({
     normalizedChart,
     rangeLabels: presentation?.rangeLabels ?? ['Day', 'Week', 'Month'],
     variantFlags,
-    lineMetrics: createLineTrendMetrics(chartType, normalizedChart),
-    dailyPnlMetrics: createDailyPnlMetrics(variantFlags, normalizedChart),
+    lineMetrics: createLineTrendMetrics(chartType, normalizedChart, presentation),
+    dailyPnlMetrics: createDailyPnlMetrics(
+      variantFlags,
+      normalizedChart,
+      presentation,
+    ),
   }
 }
 

@@ -18,6 +18,12 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(new WsAdapter(app));
   app.setGlobalPrefix('api');
+
+  app.enableCors({
+    origin: ['http://localhost:5173'],
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

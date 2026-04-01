@@ -55,8 +55,15 @@ function WidgetShell({
   onResizeHandlePointerDown,
   children,
 }: WidgetShellProps) {
+  const widgetTestId = `widget-shell-${title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')}`
+
   return (
     <section
+      data-testid={widgetTestId}
       className={`relative h-full overflow-visible rounded-[22px] border border-white/8 bg-[#0a0a0a] shadow-[0_22px_60px_rgba(0,0,0,0.52)] ${
         isResizeActive ? 'border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.28),0_22px_60px_rgba(0,0,0,0.52)]' : ''
       } ${className}`}

@@ -12,6 +12,10 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, new platform_fastify_1.FastifyAdapter());
     app.useWebSocketAdapter(new platform_ws_1.WsAdapter(app));
     app.setGlobalPrefix('api');
+    app.enableCors({
+        origin: ['http://localhost:5173'],
+        credentials: true,
+    });
     app.useGlobalPipes(new common_1.ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,

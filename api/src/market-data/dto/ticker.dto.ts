@@ -3,6 +3,7 @@ export class TickerDto {
   price!: string;
   volume24h!: string | null;
   priceChange24h!: string | null;
+  priceChange24hPercent!: string | null;
   high24h!: string | null;
   low24h!: string | null;
   fetchedAt!: string;

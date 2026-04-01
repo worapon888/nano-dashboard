@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import TradingTable from './TradingTable'
-import { ordersMock } from '../data/orders.mock'
+import { openOrdersSummaryMock } from '../data/orders.mock'
 
 describe('TradingTable pointer column resize', () => {
   it('resizes a column with pointer events without breaking the table layout', async () => {
-    render(<TradingTable title="Open Orders" rows={ordersMock} />)
+    render(<TradingTable title="Open Orders" data={openOrdersSummaryMock} />)
 
     const pairHeader = screen.getAllByText('Pair')[0]?.closest('th')
 

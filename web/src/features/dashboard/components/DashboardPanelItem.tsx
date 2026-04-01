@@ -93,7 +93,12 @@ function DashboardPanelItem({
       }}
     >
       {isTableWidget(widget) ? (
-        <TradingTable {...sharedWidgetProps} rows={widget.rows} />
+        <TradingTable
+          {...sharedWidgetProps}
+          data={widget.data}
+          loading={widget.loading}
+          error={widget.error}
+        />
       ) : (
         <ChartWidget
           {...sharedWidgetProps}

@@ -10,6 +10,8 @@ exports.DashboardModule = void 0;
 const common_1 = require("@nestjs/common");
 const internal_module_1 = require("../internal/internal.module");
 const market_data_module_1 = require("../market-data/market-data.module");
+const orders_module_1 = require("../orders/orders.module");
+const pnl_module_1 = require("../pnl/pnl.module");
 const redis_module_1 = require("../redis/redis.module");
 const users_module_1 = require("../users/users.module");
 const dashboard_controller_1 = require("./dashboard.controller");
@@ -19,7 +21,14 @@ let DashboardModule = class DashboardModule {
 exports.DashboardModule = DashboardModule;
 exports.DashboardModule = DashboardModule = __decorate([
     (0, common_1.Module)({
-        imports: [users_module_1.UsersModule, market_data_module_1.MarketDataModule, redis_module_1.RedisModule, internal_module_1.InternalModule],
+        imports: [
+            users_module_1.UsersModule,
+            market_data_module_1.MarketDataModule,
+            orders_module_1.OrdersModule,
+            pnl_module_1.PnlModule,
+            redis_module_1.RedisModule,
+            internal_module_1.InternalModule,
+        ],
         controllers: [dashboard_controller_1.DashboardController],
         providers: [dashboard_service_1.DashboardService],
         exports: [dashboard_service_1.DashboardService],

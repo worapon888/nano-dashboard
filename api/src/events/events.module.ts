@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { EventsGateway } from './events.gateway';
 import {
   MARKET_EVENTS_PUBLISHER,
@@ -16,6 +17,7 @@ import {
  */
 @Global()
 @Module({
+  imports: [AuthModule],
   providers: [
     EventsGateway,
     {

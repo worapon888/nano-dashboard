@@ -11,16 +11,36 @@ enum UserRole {
   ADMIN
 }
 
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  LIMIT
+  MARKET
+  STOP
+  TAKE_PROFIT
+}
+
+enum OrderStatus {
+  OPEN
+  PARTIAL
+  FILLED
+  CANCELLED
+}
+
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique @db.VarChar(255)
-  passwordHash String   @map("password_hash") @db.VarChar(255)
-  displayName  String   @map("display_name") @db.VarChar(120)
-  role         UserRole @default(USER)
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  displayName  String    @map("display_name") @db.VarChar(120)
+  role         UserRole  @default(USER)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  orders       Order[]
 
   @@index([role])
   @@index([isActive])
@@ -68,4 +88,25 @@ model PriceHistory {
   @@index([recordedAt])
   @@index([symbol, recordedAt])
   @@map("price_history")
+}
+
+model Order {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @map("user_id") @db.Uuid
+  pair          String      @db.VarChar(30)
+  side          OrderSide
+  type          OrderType
+  price         Decimal     @db.Decimal(30, 10)
+  amount        Decimal     @db.Decimal(30, 10)
+  filledPercent Decimal     @map("filled_percent") @db.Decimal(5, 2)
+  totalUsd      Decimal     @map("total_usd") @db.Decimal(30, 10)
+  status        OrderStatus
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@index([createdAt])
+  @@map("orders")
 }

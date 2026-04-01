@@ -11,33 +11,71 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var RedisService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RedisService = void 0;
 const common_1 = require("@nestjs/common");
 const ioredis_1 = __importDefault(require("ioredis"));
-let RedisService = class RedisService {
+let RedisService = RedisService_1 = class RedisService {
+    logger = new common_1.Logger(RedisService_1.name);
     client;
+    isConnected = false;
     constructor() {
         const redisUrl = process.env.REDIS_URL;
         if (!redisUrl) {
-            throw new Error('REDIS_URL is not set');
+            this.logger.warn('REDIS_URL is not set. Redis features will be disabled.');
+            this.client = null;
+            return;
         }
         this.client = new ioredis_1.default(redisUrl, {
             lazyConnect: true,
             maxRetriesPerRequest: 1,
             retryStrategy: () => null,
         });
+        this.client.on('connect', () => {
+            this.isConnected = true;
+            this.logger.log('Redis connected');
+        });
+        this.client.on('close', () => {
+            this.isConnected = false;
+            this.logger.warn('Redis connection closed');
+        });
+        this.client.on('end', () => {
+            this.isConnected = false;
+            this.logger.warn('Redis connection ended');
+        });
+        this.client.on('error', (error) => {
+            this.isConnected = false;
+            this.logger.warn(`Redis error: ${error.message}`);
+        });
     }
     async onModuleInit() {
-        await this.client.connect();
+        if (!this.client) {
+            return;
+        }
+        try {
+            await this.client.connect();
+        }
+        catch (error) {
+            this.isConnected = false;
+            this.logger.warn(`Redis unavailable during startup: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     async onModuleDestroy() {
+        if (!this.client) {
+            return;
+        }
         if (this.client.status !== 'end') {
-            await this.client.quit();
+            try {
+                await this.client.quit();
+            }
+            catch (error) {
+                this.logger.warn(`Redis shutdown failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+            }
         }
     }
     async get(key) {
-        const value = await this.client.get(key);
+        const value = await this.execute(() => this.client?.get(key) ?? Promise.resolve(null));
         if (value === null) {
             return null;
         }
@@ -50,31 +88,64 @@ let RedisService = class RedisService {
     }
     async set(key, value, ttlSeconds) {
         const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-        if (ttlSeconds !== undefined) {
-            await this.client.set(key, serialized, 'EX', ttlSeconds);
+        const client = this.client;
+        if (!client) {
             return;
         }
-        await this.client.set(key, serialized);
+        if (ttlSeconds !== undefined) {
+            await this.execute(() => client.set(key, serialized, 'EX', ttlSeconds));
+            return;
+        }
+        await this.execute(() => client.set(key, serialized));
     }
     async del(key) {
-        await this.client.del(key);
+        await this.execute(() => this.client?.del(key) ?? Promise.resolve(0));
+    }
+    async delByPattern(pattern) {
+        const client = this.client;
+        if (!client) {
+            return 0;
+        }
+        let cursor = '0';
+        let deletedCount = 0;
+        do {
+            const result = await this.execute(() => client.scan(cursor, 'MATCH', pattern, 'COUNT', 100));
+            if (!result) {
+                return deletedCount;
+            }
+            const [nextCursor, keys] = result;
+            cursor = nextCursor;
+            if (keys.length > 0) {
+                const deleted = await this.execute(() => client.del(...keys));
+                deletedCount += deleted ?? 0;
+            }
+        } while (cursor !== '0');
+        return deletedCount;
     }
     async setNx(key, value, ttlSeconds) {
-        const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
+        const result = await this.execute(() => this.client?.set(key, value, 'EX', ttlSeconds, 'NX') ?? Promise.resolve(null));
         return result === 'OK';
     }
     async ttl(key) {
-        return this.client.ttl(key);
+        const ttl = await this.execute(() => this.client?.ttl(key) ?? Promise.resolve(-2));
+        return ttl ?? -2;
     }
     async publish(channel, message) {
         const payload = typeof message === 'string' ? message : JSON.stringify(message);
-        return this.client.publish(channel, payload);
+        const published = await this.execute(() => this.client?.publish(channel, payload) ?? Promise.resolve(0));
+        return published ?? 0;
     }
     async subscribeOnce(channel, timeoutMs) {
+        if (!this.client) {
+            return null;
+        }
         const subscriber = this.client.duplicate({
             lazyConnect: true,
             maxRetriesPerRequest: 1,
             retryStrategy: () => null,
+        });
+        subscriber.on('error', (error) => {
+            this.logger.warn(`Redis subscriber error: ${error.message}`);
         });
         let timeoutHandle;
         try {
@@ -138,9 +209,29 @@ let RedisService = class RedisService {
     getClient() {
         return this.client;
     }
+    async ping() {
+        const response = await this.execute(() => this.client?.ping() ?? Promise.resolve(null));
+        return response === 'PONG';
+    }
+    isReady() {
+        return this.isConnected && this.client !== null;
+    }
+    async execute(operation) {
+        if (!this.client) {
+            return null;
+        }
+        try {
+            return await operation();
+        }
+        catch (error) {
+            this.isConnected = false;
+            this.logger.warn(`Redis operation failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+            return null;
+        }
+    }
 };
 exports.RedisService = RedisService;
-exports.RedisService = RedisService = __decorate([
+exports.RedisService = RedisService = RedisService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [])
 ], RedisService);

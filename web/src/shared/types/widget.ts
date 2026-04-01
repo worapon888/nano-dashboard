@@ -1,3 +1,9 @@
+import type {
+  BtcTrendRange,
+  DailyPnlRange,
+  OpenOrdersSummary,
+} from '../../types/dashboard'
+
 export type ChartType = 'line' | 'bar' | 'column' | 'pie'
 
 export type CartesianChartSeries = {
@@ -22,6 +28,47 @@ export type ChartWidgetVariant =
 export type ChartWidgetPresentation = {
   variant?: ChartWidgetVariant
   rangeLabels?: string[]
+  marketTrendData?: {
+    livePrice: number
+    change24h: number
+    change24hPercent: number
+    high: number
+    low: number
+    updatedAt: string
+  } | null
+  marketTrendControls?: {
+    selectedRange: BtcTrendRange
+    onRangeChange?: (range: BtcTrendRange) => void
+    isUpdating?: boolean
+    liveStatus?: 'connecting' | 'live' | 'offline'
+  } | null
+  volumeProfileData?: {
+    timeframe: BtcTrendRange
+    colors: string[]
+    directions?: ('bullish' | 'bearish')[]
+    totalVolume?: number
+    updatedAt: string
+  } | null
+  dailyPnlData?: {
+    range: DailyPnlRange
+    weeklyNet: number
+    best: number
+    worst: number
+    avg: number
+    win: number
+    loss: number
+    updatedAt: string
+  } | null
+  volumeProfileControls?: {
+    selectedTimeframe: BtcTrendRange
+    onTimeframeChange?: (range: BtcTrendRange) => void
+    isUpdating?: boolean
+  } | null
+  dailyPnlControls?: {
+    selectedRange: DailyPnlRange
+    onRangeChange?: (range: DailyPnlRange) => void
+    isUpdating?: boolean
+  } | null
 }
 
 export type ChartWidgetConfig = {
@@ -33,38 +80,13 @@ export type ChartWidgetConfig = {
   presentation?: ChartWidgetPresentation
 }
 
-// ─── Table widget types ──────────────────────────────────────────────────────
-
-export type OrderSide = 'buy' | 'sell'
-
-export type OrderType = 'market' | 'limit' | 'stop-limit' | 'take-profit'
-
-export type OrderStatus = 'open' | 'partial' | 'filled' | 'cancelled'
-
-export type OrderRow = {
-  id: string
-  symbol: string
-  side: OrderSide
-  type: OrderType
-  price: number
-  stopPrice?: number
-  amount: number
-  filled: number
-  filledPct: number
-  total: number
-  fee: number
-  averagePrice: number
-  status: OrderStatus
-  createdAt: string
-  updatedAt: string
-  notes?: string
-}
-
 export type TableWidgetConfig = {
   id: string
   title: string
   widgetType: 'table'
-  rows: OrderRow[]
+  data?: OpenOrdersSummary | null
+  loading?: boolean
+  error?: string | null
 }
 
 export type AnyWidgetConfig = ChartWidgetConfig | TableWidgetConfig

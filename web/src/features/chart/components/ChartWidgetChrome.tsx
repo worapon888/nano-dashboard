@@ -34,27 +34,44 @@ function ChartWidgetChrome({
   onControlPointerDown,
   children,
 }: ChartWidgetChromeProps) {
+  const handleControlPointerDown = (
+    event: ReactPointerEvent<HTMLElement>,
+    action?: () => void,
+  ) => {
+    onControlPointerDown(event)
+    action?.()
+  }
+
+  const handleKeyboardClick = (
+    event: ReactPointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>,
+    action?: () => void,
+  ) => {
+    if (event.detail === 0) {
+      action?.()
+    }
+  }
+
   const windowControls = (
     <div className="flex items-center gap-2">
       <button
         type="button"
         aria-label={isMinimized ? `Restore ${title}` : `Minimize ${title}`}
-        onPointerDown={onControlPointerDown}
-        onClick={onMinimizeToggle}
+        onPointerDown={(event) => handleControlPointerDown(event, onMinimizeToggle)}
+        onClick={(event) => handleKeyboardClick(event, onMinimizeToggle)}
         className="h-3 w-3 rounded-full bg-rose-500/90 transition hover:bg-rose-400"
       />
       <button
         type="button"
         aria-label={`Reset ${title} to default size`}
-        onPointerDown={onControlPointerDown}
-        onClick={onResetToDefault}
+        onPointerDown={(event) => handleControlPointerDown(event, onResetToDefault)}
+        onClick={(event) => handleKeyboardClick(event, onResetToDefault)}
         className="h-3 w-3 rounded-full bg-amber-400/90 transition hover:bg-amber-300"
       />
       <button
         type="button"
         aria-label={isMaximized ? `Restore ${title}` : `Maximize ${title}`}
-        onPointerDown={onControlPointerDown}
-        onClick={onMaximizeToggle}
+        onPointerDown={(event) => handleControlPointerDown(event, onMaximizeToggle)}
+        onClick={(event) => handleKeyboardClick(event, onMaximizeToggle)}
         className="h-3 w-3 rounded-full bg-emerald-500/90 transition hover:bg-emerald-400"
       />
     </div>

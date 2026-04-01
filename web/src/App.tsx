@@ -1,5 +1,5 @@
 import { ReactLenis } from 'lenis/react'
-import DashboardPage from './features/dashboard/components/DashboardPage'
+import DashboardPage from './pages/DashboardPage'
 
 function App() {
   return (

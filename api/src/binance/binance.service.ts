@@ -13,10 +13,27 @@ type BinanceTickerResponse = {
   symbol?: string;
   lastPrice?: string;
   volume?: string;
+  priceChange?: string;
   priceChangePercent?: string;
   highPrice?: string;
   lowPrice?: string;
 };
+
+export type BinanceKlineInterval = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+export type BinanceKlineResponse = [
+  openTime: number,
+  openPrice: string,
+  highPrice: string,
+  lowPrice: string,
+  closePrice: string,
+  volume: string,
+  closeTime: number,
+  quoteAssetVolume: string,
+  numberOfTrades: number,
+  takerBuyBaseAssetVolume: string,
+  takerBuyQuoteAssetVolume: string,
+  ignore: string,
+];
 
 const BINANCE_REQUEST_TIMEOUT_MS = 5000;
 const BINANCE_MAX_ATTEMPTS = 4;
@@ -52,39 +69,35 @@ export class BinanceService {
 
   async getTicker(symbol: string): Promise<TickerDto> {
     const normalizedSymbol = symbol.toUpperCase();
-    let lastError: unknown;
+    const payload = await this.requestWithRetry<BinanceTickerResponse>(
+      normalizedSymbol,
+      '/api/v3/ticker/24hr',
+      { symbol: normalizedSymbol },
+      'ticker',
+    );
 
-    for (let attempt = 1; attempt <= BINANCE_MAX_ATTEMPTS; attempt++) {
-      try {
-        const response = await firstValueFrom(
-          this.httpService.get<BinanceTickerResponse>(
-            `${this.baseUrl}/api/v3/ticker/24hr`,
-            {
-              params: { symbol: normalizedSymbol },
-              timeout: BINANCE_REQUEST_TIMEOUT_MS,
-            },
-          ),
-        );
+    return this.toTickerDto(normalizedSymbol, payload);
+  }
 
-        return this.toTickerDto(normalizedSymbol, response.data);
-      } catch (error) {
-        lastError = error;
+  async getKlines(
+    symbol: string,
+    interval: BinanceKlineInterval,
+    limit: number,
+  ): Promise<BinanceKlineResponse[]> {
+    const normalizedSymbol = symbol.toUpperCase();
+    const safeLimit =
+      Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 1;
 
-        if (!this.shouldRetry(error) || attempt === BINANCE_MAX_ATTEMPTS) {
-          break;
-        }
-
-        const delayMs = this.getRetryDelayMs(attempt);
-
-        this.logger.warn(
-          `Retrying Binance ticker fetch for ${normalizedSymbol} (attempt ${attempt})`,
-        );
-
-        await this.sleep(delayMs);
-      }
-    }
-
-    throw this.toUnavailableException(normalizedSymbol, lastError);
+    return this.requestWithRetry<BinanceKlineResponse[]>(
+      normalizedSymbol,
+      '/api/v3/klines',
+      {
+        symbol: normalizedSymbol,
+        interval,
+        limit: safeLimit,
+      },
+      `klines:${interval}`,
+    );
   }
 
   private toTickerDto(
@@ -95,12 +108,60 @@ export class BinanceService {
       symbol: normalizedSymbol,
       price: this.toStringValue(payload.lastPrice) ?? '0',
       volume24h: this.toStringValue(payload.volume),
-      priceChange24h: this.toStringValue(payload.priceChangePercent),
+      priceChange24h: this.toStringValue(payload.priceChange),
+      priceChange24hPercent: this.toStringValue(payload.priceChangePercent),
       high24h: this.toStringValue(payload.highPrice),
       low24h: this.toStringValue(payload.lowPrice),
       fetchedAt: new Date().toISOString(),
       source: 'binance',
     };
+  }
+
+  private async requestWithRetry<TResponse>(
+    normalizedSymbol: string,
+    path: string,
+    params: Record<string, string | number>,
+    requestLabel: string,
+  ): Promise<TResponse> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= BINANCE_MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<TResponse>(`${this.baseUrl}${path}`, {
+            params,
+            timeout: BINANCE_REQUEST_TIMEOUT_MS,
+          }),
+        );
+
+        return response.data;
+      } catch (error) {
+        lastError = error;
+
+        if (!this.shouldRetry(error) || attempt === BINANCE_MAX_ATTEMPTS) {
+          break;
+        }
+
+        const delayMs = this.getRetryDelayMs(attempt);
+        const axiosError = error as AxiosError | undefined;
+        const detail =
+          axiosError?.response?.status ?? axiosError?.code ?? 'unknown';
+
+        this.logger.warn(
+          `Retrying Binance ${requestLabel} fetch for ${normalizedSymbol} (attempt ${attempt}, detail ${detail})`,
+        );
+
+        await this.sleep(delayMs);
+      }
+    }
+
+    const unavailableException = this.toUnavailableException(
+      normalizedSymbol,
+      lastError,
+      requestLabel,
+    );
+
+    throw unavailableException;
   }
 
   private shouldRetry(error: unknown): boolean {
@@ -128,6 +189,7 @@ export class BinanceService {
   private toUnavailableException(
     normalizedSymbol: string,
     error: unknown,
+    requestLabel = 'request',
   ): BinanceUnavailableException {
     const axiosError = error as AxiosError | undefined;
 
@@ -139,12 +201,12 @@ export class BinanceService {
       : (errorCode ?? 'unknown');
 
     this.logger.error(
-      `Binance ticker fetch failed for ${normalizedSymbol}: ${detail}`,
+      `Binance ${requestLabel} fetch failed for ${normalizedSymbol}: ${detail}`,
       axiosError?.stack,
     );
 
     return new BinanceUnavailableException(
-      `Binance ticker fetch failed for ${normalizedSymbol}`,
+      `Binance ${requestLabel} fetch failed for ${normalizedSymbol}`,
     );
   }
 

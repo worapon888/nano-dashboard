@@ -18,6 +18,7 @@ const common_1 = require("@nestjs/common");
 const events_tokens_1 = require("../events/events.tokens");
 const prisma_service_1 = require("../prisma/prisma.service");
 const redis_service_1 = require("../redis/redis.service");
+const dashboard_cache_util_1 = require("../dashboard/dashboard-cache.util");
 const USER_SELECT = {
     id: true,
     email: true,
@@ -28,7 +29,6 @@ const USER_SELECT = {
     updatedAt: true,
 };
 const ACTIVE_USER_COUNT_CACHE_KEY = 'app:users:active-count';
-const DASHBOARD_SUMMARY_CACHE_KEY = 'app:dashboard:summary';
 let UsersService = UsersService_1 = class UsersService {
     prisma;
     redisService;
@@ -187,7 +187,7 @@ let UsersService = UsersService_1 = class UsersService {
         try {
             await Promise.all([
                 this.redisService.del(ACTIVE_USER_COUNT_CACHE_KEY),
-                this.redisService.del(DASHBOARD_SUMMARY_CACHE_KEY),
+                this.redisService.delByPattern((0, dashboard_cache_util_1.getDashboardSummaryCachePattern)()),
             ]);
         }
         catch (error) {

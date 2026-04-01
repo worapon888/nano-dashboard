@@ -1,14 +1,16 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BinanceModule } from '../binance/binance.module';
-import { CacheModule } from '../cache/cache.module';
+import { RedisModule } from '../redis/redis.module';
+import { BtcPriceLiveService } from './btc-price-live.service';
+import { BtcVolumeLiveService } from './btc-volume-live.service';
 import { MarketDataController } from './market-data.controller';
 import { MarketDataService } from './market-data.service';
 
 @Module({
-  imports: [AuthModule, BinanceModule, CacheModule],
+  imports: [AuthModule, BinanceModule, RedisModule],
   controllers: [MarketDataController],
-  providers: [MarketDataService],
+  providers: [MarketDataService, BtcPriceLiveService, BtcVolumeLiveService],
   exports: [MarketDataService],
 })
 export class MarketDataModule {}

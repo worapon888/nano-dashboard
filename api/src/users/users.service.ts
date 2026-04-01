@@ -13,6 +13,7 @@ import { RedisService } from '../redis/redis.service';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { getDashboardSummaryCachePattern } from '../dashboard/dashboard-cache.util';
 
 const USER_SELECT = {
   id: true,
@@ -25,7 +26,6 @@ const USER_SELECT = {
 } satisfies Prisma.UserSelect;
 
 const ACTIVE_USER_COUNT_CACHE_KEY = 'app:users:active-count';
-const DASHBOARD_SUMMARY_CACHE_KEY = 'app:dashboard:summary';
 
 @Injectable()
 export class UsersService {
@@ -224,7 +224,7 @@ export class UsersService {
     try {
       await Promise.all([
         this.redisService.del(ACTIVE_USER_COUNT_CACHE_KEY),
-        this.redisService.del(DASHBOARD_SUMMARY_CACHE_KEY),
+        this.redisService.delByPattern(getDashboardSummaryCachePattern()),
       ]);
     } catch (error) {
       this.logger.warn(

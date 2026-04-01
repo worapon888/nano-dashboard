@@ -1,60 +1,132 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
+const adapter_pg_1 = require("@prisma/adapter-pg");
 const client_1 = require("@prisma/client");
-const bcrypt_1 = __importDefault(require("bcrypt"));
-const prisma = new client_1.PrismaClient();
-const SALT_ROUNDS = 12;
-const SEEDED_HISTORY_SOURCE = 'seed';
-async function seedUsers() {
-    const users = [
-        {
-            email: 'admin@nanodashboard.local',
-            password: 'Admin123!@#',
-            displayName: 'System Admin',
-            role: client_1.UserRole.ADMIN,
-            isActive: true,
-        },
-        {
-            email: 'alice@nanodashboard.local',
-            password: 'Alice123!@#',
-            displayName: 'Alice Trader',
-            role: client_1.UserRole.USER,
-            isActive: true,
-        },
-        {
-            email: 'bob@nanodashboard.local',
-            password: 'Bob123!@#',
-            displayName: 'Bob Analyst',
-            role: client_1.UserRole.USER,
-            isActive: true,
-        },
-    ];
-    const hashedUsers = await Promise.all(users.map(async (user) => ({
-        ...user,
-        passwordHash: await bcrypt_1.default.hash(user.password, SALT_ROUNDS),
-    })));
-    await Promise.all(hashedUsers.map(({ password, ...user }) => prisma.user.upsert({
-        where: { email: user.email },
-        update: {
-            passwordHash: user.passwordHash,
-            displayName: user.displayName,
-            role: user.role,
-            isActive: user.isActive,
-            deletedAt: null,
-        },
-        create: {
-            email: user.email,
-            passwordHash: user.passwordHash,
-            displayName: user.displayName,
-            role: user.role,
-            isActive: user.isActive,
-        },
-    })));
+const pg_1 = require("pg");
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
 }
+const pool = new pg_1.Pool({ connectionString });
+const adapter = new adapter_pg_1.PrismaPg(pool);
+const prisma = new client_1.PrismaClient({ adapter });
+const SEEDED_HISTORY_SOURCE = 'seed';
+const DEMO_USER_EMAIL = 'admin@example.com';
+const DEMO_PASSWORD_HASH = '$2b$12$kS0IXXRs2YNFm62wrnBkpOFA1StCgh.Wt/iU7h5JAXS6yG.8yIsAC';
+const DEMO_USER = {
+    email: DEMO_USER_EMAIL,
+    passwordHash: DEMO_PASSWORD_HASH,
+    displayName: 'Demo User',
+    role: client_1.UserRole.ADMIN,
+    isActive: true,
+};
+const DECIMAL_SCALE = 10;
+function decimal(value) {
+    return new client_1.Prisma.Decimal(value);
+}
+function toMoney(value) {
+    return value.toDecimalPlaces(DECIMAL_SCALE);
+}
+function buildDemoOrder(seed) {
+    const price = decimal(seed.price);
+    const amount = decimal(seed.amount);
+    const totalUsd = toMoney(price.mul(amount));
+    return {
+        pair: seed.pair,
+        side: seed.side,
+        type: seed.type,
+        price,
+        amount,
+        filledPercent: decimal(seed.filledPercent).toDecimalPlaces(2),
+        totalUsd,
+        status: seed.status,
+        createdAt: seed.createdAt,
+        updatedAt: new Date(seed.createdAt.getTime() + 15 * 60 * 1000),
+    };
+}
+const DEMO_OPEN_ORDERS = [
+    buildDemoOrder({
+        pair: 'BTC/USDT',
+        side: client_1.OrderSide.BUY,
+        type: client_1.OrderType.LIMIT,
+        price: 68420,
+        amount: 0.15,
+        filledPercent: 0,
+        status: client_1.OrderStatus.OPEN,
+        createdAt: new Date('2026-03-31T16:23:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'ETH/USDT',
+        side: client_1.OrderSide.SELL,
+        type: client_1.OrderType.LIMIT,
+        price: 3480,
+        amount: 2.5,
+        filledPercent: 48,
+        status: client_1.OrderStatus.PARTIAL,
+        createdAt: new Date('2026-03-31T17:14:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'SOL/USDT',
+        side: client_1.OrderSide.BUY,
+        type: client_1.OrderType.STOP,
+        price: 188.5,
+        amount: 12,
+        filledPercent: 0,
+        status: client_1.OrderStatus.OPEN,
+        createdAt: new Date('2026-03-31T17:45:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'BNB/USDT',
+        side: client_1.OrderSide.SELL,
+        type: client_1.OrderType.TAKE_PROFIT,
+        price: 420,
+        amount: 8,
+        filledPercent: 100,
+        status: client_1.OrderStatus.FILLED,
+        createdAt: new Date('2026-03-30T15:30:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'XRP/USDT',
+        side: client_1.OrderSide.BUY,
+        type: client_1.OrderType.LIMIT,
+        price: 0.624,
+        amount: 5000,
+        filledPercent: 0,
+        status: client_1.OrderStatus.CANCELLED,
+        createdAt: new Date('2026-03-30T14:15:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'AVAX/USDT',
+        side: client_1.OrderSide.BUY,
+        type: client_1.OrderType.MARKET,
+        price: 36.44,
+        amount: 50,
+        filledPercent: 100,
+        status: client_1.OrderStatus.FILLED,
+        createdAt: new Date('2026-03-31T18:00:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'MATIC/USDT',
+        side: client_1.OrderSide.SELL,
+        type: client_1.OrderType.LIMIT,
+        price: 1.145,
+        amount: 3000,
+        filledPercent: 26.7,
+        status: client_1.OrderStatus.PARTIAL,
+        createdAt: new Date('2026-03-29T16:55:00.000Z'),
+    }),
+    buildDemoOrder({
+        pair: 'LINK/USDT',
+        side: client_1.OrderSide.BUY,
+        type: client_1.OrderType.LIMIT,
+        price: 14.25,
+        amount: 100,
+        filledPercent: 0,
+        status: client_1.OrderStatus.OPEN,
+        createdAt: new Date('2026-03-31T18:30:00.000Z'),
+    }),
+];
 function buildHistorySeries(symbol, cryptoPriceId, endTime) {
     const series = symbol === 'BTCUSDT'
         ? [
@@ -157,6 +229,48 @@ function buildHistorySeries(symbol, cryptoPriceId, endTime) {
         recordedAt: new Date(endTime.getTime() - (series.length - index) * 60 * 60 * 1000),
     }));
 }
+async function seedDemoUser() {
+    const user = await prisma.user.upsert({
+        where: { email: DEMO_USER.email },
+        update: {
+            passwordHash: DEMO_USER.passwordHash,
+            displayName: DEMO_USER.displayName,
+            role: DEMO_USER.role,
+            isActive: DEMO_USER.isActive,
+            deletedAt: null,
+        },
+        create: {
+            email: DEMO_USER.email,
+            passwordHash: DEMO_USER.passwordHash,
+            displayName: DEMO_USER.displayName,
+            role: DEMO_USER.role,
+            isActive: DEMO_USER.isActive,
+        },
+    });
+    console.info(`[seed] demo user ready: ${user.email} (${user.id})`);
+    return user;
+}
+async function seedDemoOpenOrders(userId) {
+    await prisma.order.deleteMany({
+        where: { userId },
+    });
+    const result = await prisma.order.createMany({
+        data: DEMO_OPEN_ORDERS.map((order) => ({
+            userId,
+            pair: order.pair,
+            side: order.side,
+            type: order.type,
+            price: order.price,
+            amount: order.amount,
+            filledPercent: order.filledPercent,
+            totalUsd: order.totalUsd,
+            status: order.status,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+        })),
+    });
+    console.info(`[seed] demo open orders inserted: ${result.count}`);
+}
 async function seedMarketData() {
     const now = new Date();
     const btcSnapshot = await prisma.cryptoPrice.upsert({
@@ -218,18 +332,27 @@ async function seedMarketData() {
             data: historyRows,
         }),
     ]);
+    console.info('[seed] market snapshots and history refreshed');
+}
+async function seedDailyPnl() {
+    console.info('[seed] daily pnl skipped: no Prisma PnL model configured; dashboard uses service-level demo pnl data');
 }
 async function main() {
-    await seedUsers();
+    const demoUser = await seedDemoUser();
+    await seedDemoOpenOrders(demoUser.id);
     await seedMarketData();
+    await seedDailyPnl();
 }
 main()
     .then(async () => {
-    await prisma.$disconnect();
+    console.info('[seed] completed successfully');
 })
     .catch(async (error) => {
-    console.error('Seeding failed:', error);
+    console.error('[seed] failed:', error);
+    process.exitCode = 1;
+})
+    .finally(async () => {
     await prisma.$disconnect();
-    process.exit(1);
+    await pool.end();
 });
 //# sourceMappingURL=seed.js.map
