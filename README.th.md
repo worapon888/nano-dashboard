@@ -2,7 +2,7 @@
 
 NanoDashboard เป็นผลงาน take-home assignment สำหรับตำแหน่ง Mid-Senior Fullstack Developer โดยสร้างเป็น trading-style dashboard ที่มีทั้ง React frontend และ NestJS backend จุดเน้นของโปรเจกต์นี้มีสองส่วนหลัก คือฝั่ง UI ที่ปรับแต่ง layout ของ widget ได้จริง และฝั่ง backend ที่รวมข้อมูลผู้ใช้ ข้อมูลตลาดที่มี cache และ event แบบ realtime ให้ออกมาเป็น dashboard contract เดียวสำหรับ frontend ใช้งาน
 
-แนวทางการทำไม่ได้ตั้งใจทำเป็นแค่ชุดหน้าจอหรือ API demo แยกส่วนกัน แต่ทำให้ใกล้กับ product slice ขนาดเล็กที่ยัง review ด้าน architecture ได้จริง ฝั่ง frontend รองรับ drag, resize, widget composition, chart หลายประเภท, table แบบปรับขนาดคอลัมน์ได้ และ realtime update ส่วน backend มี JWT auth, user CRUD, Binance REST และ WebSocket integration, Redis cache, websocket broadcasting และ aggregated dashboard endpoint ที่มี timeout / fallback behavior
+แนวทางการทำไม่ได้ตั้งใจทำเป็นแค่ชุดหน้าจอหรือ API demo แยกส่วนกัน แต่ทำให้ใกล้กับ product slice ขนาดเล็กที่ยัง review ด้าน architecture ได้จริง ฝั่ง frontend รองรับ drag, resize, widget composition, chart หลายประเภท, table แบบปรับขนาดคอลัมน์ได้ และ realtime update ส่วน backend มี JWT auth, refresh token flow, user CRUD, Binance REST และ realtime integration, Redis cache, websocket broadcasting และ aggregated dashboard endpoint ที่มี timeout / fallback behavior
 
 โปรเจกต์นี้ไม่ได้ถูกนำเสนอว่าเป็นระบบเทรด production-grade แบบสมบูรณ์ ทุกส่วนที่เป็น production-like จะระบุอย่างตรงไปตรงมา เช่น service separation, validation, cache strategy และ degraded-state handling ขณะที่ส่วนที่ยังเป็น demo-oriented เช่น seeded order / PNL data หรือ operational tooling ที่ยังไม่ครบ ก็จะระบุไว้ชัดเจนเช่นกัน
 
@@ -52,12 +52,12 @@ NanoDashboard เป็นผลงาน take-home assignment สำหรั�
 
 - Users CRUD + JWT
   - Status: Done
-  - Implementation: `AuthController` รองรับ register, login และ `me`; `UsersController` รองรับ list, get-by-id, update และ delete โดยใช้ JWT guard และ role guard สำหรับ admin route
-  - Notes: มี access token อายุ 15 นาที แต่ยังไม่มี refresh-token flow
+  - Implementation: `AuthController` รองรับ register, login, refresh และ `me`; `UsersController` รองรับ list, get-by-id, update และ delete โดยใช้ JWT guard และ role guard สำหรับ admin route
+  - Notes: มี access token อายุ 15 นาที และมี refresh-token flow สำหรับต่ออายุ session
 
 - WebSocket: `user.created` / `user.updated`
   - Status: Done
-  - Implementation: `EventsGateway` เปิด pure WebSocket endpoint ที่ `/ws`, authenticate client ได้จาก bearer token หรือ query token และ broadcast domain events แบบ scoped
+  - Implementation: `EventsGateway` เปิด Socket.IO gateway ที่ path `/ws`, authenticate client ได้จาก auth token, bearer header หรือ query token และ broadcast domain events แบบ scoped
   - Notes: admin client ได้รับ user event กว้างกว่า client ทั่วไป และมี room-style delivery สำหรับ authenticated user
 
 - Binance REST + WebSocket
@@ -104,7 +104,7 @@ NanoDashboard เป็นผลงาน take-home assignment สำหรั�
   - NestJS
   - TypeScript
   - Fastify adapter สำหรับ NestJS
-  - Native WebSocket gateway ผ่าน `ws`
+  - Socket.IO gateways สำหรับ `/ws` และ `/users`
   - JWT authentication
   - Prisma ORM
 
@@ -200,7 +200,7 @@ Authentication อยู่ในโมดูล `auth` Registration hash passwo
 
 ### WebSocket events
 
-`EventsGateway` ใช้ pure WebSocket endpoint ที่ `/ws` ทำหน้าที่ authenticate client แบบ optional, เก็บ connection count, รองรับ room-style scoped delivery และ broadcast event ต่อไปนี้:
+`EventsGateway` ใช้ Socket.IO gateway ที่ path `/ws` ทำหน้าที่ authenticate client แบบ optional, เก็บ connection count, รองรับ room-style scoped delivery และ broadcast event ต่อไปนี้:
 
 - `user.created`
 - `user.updated`
@@ -358,9 +358,10 @@ npm install
 สร้าง `api/.env`:
 
 ```env
-DATABASE_URL=postgresql://<user>:<password>@localhost:5432/nanodashboard
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/api?schema=public
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<replace-with-secure-secret>
+JWT_REFRESH_SECRET=<replace-with-secure-refresh-secret>
 BINANCE_BASE_URL=https://api.binance.com
 BINANCE_WS_BASE_URL=wss://stream.binance.com:9443/ws
 BINANCE_LIVE_STREAM_ENABLED=true
@@ -425,12 +426,13 @@ frontend จะรันที่:
 | `DATABASE_URL`                | `postgresql://user:password@localhost:5432/nanodashboard` |                  Yes | Prisma/PostgreSQL connection                                                                |
 | `REDIS_URL`                   | `redis://localhost:6379`                                  |                  Yes | Redis cache connection                                                                      |
 | `JWT_SECRET`                  | `<secure-secret>`                                         |                  Yes | ใช้ sign/verify JWT                                                                         |
+| `JWT_REFRESH_SECRET`          | `<secure-refresh-secret>`                                 |                  Yes | ใช้ sign/verify refresh token                                                               |
 | `BINANCE_BASE_URL`            | `https://api.binance.com`                                 |                  Yes | Binance REST base URL                                                                       |
 | `BINANCE_WS_BASE_URL`         | `wss://stream.binance.com:9443/ws`                        |                  Yes | Binance websocket base URL                                                                  |
 | `BINANCE_LIVE_STREAM_ENABLED` | `true`                                                    |                  Yes | เปิด/ปิด backend BTC live stream consumers                                                  |
 | `PORT`                        | `3000`                                                    |                  Yes | backend HTTP port                                                                           |
 | `VITE_API_BASE_URL`           | `http://localhost:3000`                                   |                  Yes | frontend REST + websocket base origin                                                       |
-| `FRONTEND_URL`                | `http://localhost:5173`                                   |      No, recommended | โดยทั่วไปควรใช้สำหรับ CORS ใน production แต่โค้ดปัจจุบันยัง hardcode localhost ใน `main.ts` |
+| `FRONTEND_URL`                | `http://localhost:5173`                                   |                   No | แนะนำสำหรับ production config ในอนาคต แต่โค้ดปัจจุบันยังไม่ได้อ่านค่าตัวแปรนี้ตรง ๆ        |
 | `NODE_ENV`                    | `development`                                             |           Implicitly | มีผลต่อ behavior บางอย่างใน test/runtime                                                    |
 
 ## Testing
@@ -482,6 +484,7 @@ Important HTTP endpoints ที่ implement แล้ว:
 - Auth
   - `POST /api/auth/register`
   - `POST /api/auth/login`
+  - `POST /api/auth/refresh`
   - `GET /api/auth/me`
 
 - Users
@@ -498,10 +501,11 @@ Important HTTP endpoints ที่ implement แล้ว:
   - `GET /api/dashboard/summary`
 
 - WebSocket
-  - `WS /ws`
+  - `Socket.IO /users`
+  - `Socket.IO path /ws`
   - Events: `user.created`, `user.updated`, `btc.price.updated`, `btc.volume.updated`
 
-ปัจจุบันยังไม่ได้เปิด Swagger/OpenAPI และยังไม่มี Postman collection ใน repo
+Swagger/OpenAPI เปิดใช้งานแล้วที่ `/api/docs` และมี OpenAPI JSON ที่ `/api/docs-json` พร้อม Postman collection ใน `api/postman/NanoDashboard.postman_collection.json`
 
 ## Performance and Reliability
 
@@ -555,8 +559,8 @@ Important HTTP endpoints ที่ implement แล้ว:
 
 - Open orders และ daily PNL ยังมีส่วนที่เป็น demo-oriented สำหรับ seeded admin user โดยข้อมูลสองส่วนนี้อิง seed data มากกว่าข้อมูล brokerage จริง
 - โครงสร้างระบบมีความ production-like แต่ observability ยังไม่ครบ เช่น metrics, tracing, alerting และ operational dashboards
-- CORS config ปัจจุบัน hardcode localhost ใน `main.ts`; production ควร externalize เป็น env
-- ยังไม่มี refresh-token flow หรือ long-lived session management
+- CORS config ปัจจุบันยังกำหนด allowed origins ไว้ใน `main.ts`; production ควร externalize เป็น env/config ให้ชัดเจนขึ้น
+- มี refresh-token flow แล้ว แต่ยังไม่มี long-lived session management ที่ซับซ้อนกว่านี้ เช่น device/session tracking
 - Table row expansion ยังไม่ได้ implement
 - แม้ schema จะรองรับ market data persistence แต่ assignment เวอร์ชันนี้ยังเน้น dashboard consumption และ live updates มากกว่าการเก็บข้อมูลระยะยาวเพื่อ analytics
 
@@ -579,7 +583,7 @@ submission นี้ประกอบด้วย:
 - deployment placeholders ใน README นี้สำหรับแทนลิงก์ที่ใช้งานจริง
 - documentation ด้าน architecture, trade-offs และ runtime behavior
 
-ปัจจุบันยังไม่มี Swagger หรือ Postman asset ใน repo และ API surface ถูกสรุปไว้ใน README นี้แทน
+ปัจจุบันมี Swagger/OpenAPI และ Postman asset ใน repo แล้ว โดย README นี้ยังทำหน้าที่อธิบาย architecture, trade-offs และ runtime behavior เพิ่มเติม
 
 ## Manual replacement checklist
 

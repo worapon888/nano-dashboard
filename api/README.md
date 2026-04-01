@@ -4,9 +4,9 @@ NestJS backend for NanoDashboard. This service provides JWT authentication, user
 
 ## Deployment
 
-- Backend URL: `<REPLACE_WITH_BACKEND_URL>`
-- Swagger UI: `<REPLACE_WITH_BACKEND_URL>/api/docs`
-- Swagger JSON: `<REPLACE_WITH_BACKEND_URL>/api/docs-json`
+- Backend URL: `https://dynamic-embrace-production.up.railway.app`
+- Swagger UI: `https://dynamic-embrace-production.up.railway.app/api/docs`
+- Swagger JSON: `https://dynamic-embrace-production.up.railway.app/api/docs-json`
 
 ## 1. Run The Project
 
@@ -63,7 +63,7 @@ Swagger:
 
 ### Docker Compose
 
-This repository already includes a root-level [docker-compose.yml](/c:/Users/User/Desktop/nanodashboard/docker-compose.yml) for PostgreSQL and Redis.
+This repository already includes a root-level [docker-compose.yml](../docker-compose.yml) for PostgreSQL and Redis.
 
 Start services:
 
@@ -91,20 +91,20 @@ npm run start:dev
 
 ## 2. Environment Variables
 
-Current example file: [.env.example](/c:/Users/User/Desktop/nanodashboard/api/.env.example)
+Current example file: [.env.example](./.env.example)
 
 Required variables:
 
-| Variable | Example | Purpose |
-| --- | --- | --- |
-| `PORT` | `3000` | HTTP port for NestJS |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/api?schema=public` | PostgreSQL connection for Prisma |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
-| `JWT_SECRET` | `change-me` | Access token signing secret |
-| `JWT_REFRESH_SECRET` | `change-me-refresh` | Refresh token signing secret |
-| `BINANCE_BASE_URL` | `https://api.binance.com` | Binance REST base URL |
-| `BINANCE_WS_BASE_URL` | `wss://stream.binance.com:9443/ws` | Binance websocket base URL |
-| `BINANCE_LIVE_STREAM_ENABLED` | `true` | Optional toggle for live stream consumers |
+| Variable                      | Example                                                           | Purpose                                   |
+| ----------------------------- | ----------------------------------------------------------------- | ----------------------------------------- |
+| `PORT`                        | `3000`                                                            | HTTP port for NestJS                      |
+| `DATABASE_URL`                | `postgresql://postgres:postgres@localhost:5432/api?schema=public` | PostgreSQL connection for Prisma          |
+| `REDIS_URL`                   | `redis://localhost:6379`                                          | Redis connection string                   |
+| `JWT_SECRET`                  | `change-me`                                                       | Access token signing secret               |
+| `JWT_REFRESH_SECRET`          | `change-me-refresh`                                               | Refresh token signing secret              |
+| `BINANCE_BASE_URL`            | `https://api.binance.com`                                         | Binance REST base URL                     |
+| `BINANCE_WS_BASE_URL`         | `wss://stream.binance.com:9443/ws`                                | Binance websocket base URL                |
+| `BINANCE_LIVE_STREAM_ENABLED` | `true`                                                            | Optional toggle for live stream consumers |
 
 Example `.env`:
 
@@ -218,7 +218,7 @@ Likely first extraction candidate in the future:
 
 ## 5. Database Schema
 
-Schema source: [schema.prisma](/c:/Users/User/Desktop/nanodashboard/api/prisma/schema.prisma)
+Schema source: [schema.prisma](./prisma/schema.prisma)
 
 ### Users
 
@@ -326,27 +326,27 @@ Recommended mitigation:
 
 ## 7. API Endpoints Summary
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| `POST` | `/api/auth/register` | No | Register a new user |
-| `POST` | `/api/auth/login` | No | Login and return access + refresh tokens |
-| `POST` | `/api/auth/refresh` | No | Exchange a refresh token for a new access + refresh token pair |
-| `GET` | `/api/auth/me` | JWT | Get authenticated user |
-| `GET` | `/api/users` | JWT | List users |
-| `GET` | `/api/users/me` | JWT | Get authenticated user through users module |
-| `GET` | `/api/users/:id` | JWT | Get user by id |
-| `PATCH` | `/api/users/:id` | JWT | Update user, owner or admin |
-| `DELETE` | `/api/users/:id` | JWT | Soft delete user |
-| `GET` | `/api/market/ticker/:symbol` | JWT | Get normalized ticker data |
-| `GET` | `/api/dashboard` | JWT | Get aggregated users + cached market prices |
-| `GET` | `/api/dashboard/summary` | JWT | Get full dashboard summary |
+| Method   | Path                         | Auth | Description                                                    |
+| -------- | ---------------------------- | ---- | -------------------------------------------------------------- |
+| `POST`   | `/api/auth/register`         | No   | Register a new user                                            |
+| `POST`   | `/api/auth/login`            | No   | Login and return access + refresh tokens                       |
+| `POST`   | `/api/auth/refresh`          | No   | Exchange a refresh token for a new access + refresh token pair |
+| `GET`    | `/api/auth/me`               | JWT  | Get authenticated user                                         |
+| `GET`    | `/api/users`                 | JWT  | List users                                                     |
+| `GET`    | `/api/users/me`              | JWT  | Get authenticated user through users module                    |
+| `GET`    | `/api/users/:id`             | JWT  | Get user by id                                                 |
+| `PATCH`  | `/api/users/:id`             | JWT  | Update user, owner or admin                                    |
+| `DELETE` | `/api/users/:id`             | JWT  | Soft delete user                                               |
+| `GET`    | `/api/market/ticker/:symbol` | JWT  | Get normalized ticker data                                     |
+| `GET`    | `/api/dashboard`             | JWT  | Get aggregated users + cached market prices                    |
+| `GET`    | `/api/dashboard/summary`     | JWT  | Get full dashboard summary                                     |
 
 Websocket endpoints:
 
-| Transport | Path | Notes |
-| --- | --- | --- |
-| Socket.IO | `/users` | User events gateway |
-| Socket.IO | `/ws` | General realtime events gateway |
+| Transport | Path     | Notes                           |
+| --------- | -------- | ------------------------------- |
+| Socket.IO | `/users` | User events gateway             |
+| Socket.IO | `/ws`    | General realtime events gateway |
 
 Key events:
 
@@ -392,7 +392,7 @@ npm run build
 
 Included file:
 
-- [NanoDashboard.postman_collection.json](/c:/Users/User/Desktop/nanodashboard/api/postman/NanoDashboard.postman_collection.json)
+- [NanoDashboard.postman_collection.json](./postman/NanoDashboard.postman_collection.json)
 
 How to use:
 
