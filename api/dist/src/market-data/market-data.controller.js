@@ -14,7 +14,9 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MarketDataController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
+const error_response_dto_1 = require("../common/dto/error-response.dto");
 const api_response_util_1 = require("../common/utils/api-response.util");
 const market_data_service_1 = require("./market-data.service");
 let MarketDataController = class MarketDataController {
@@ -29,6 +31,30 @@ let MarketDataController = class MarketDataController {
 };
 exports.MarketDataController = MarketDataController;
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'Get ticker data by symbol' }),
+    (0, swagger_1.ApiParam)({ name: 'symbol', example: 'BTCUSDT' }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'Ticker retrieved successfully',
+        schema: {
+            example: {
+                success: true,
+                message: 'Ticker retrieved successfully',
+                data: {
+                    symbol: 'BTCUSDT',
+                    price: '68432.10',
+                    volume24h: '23100.50',
+                    priceChange24h: '1780.00',
+                    priceChange24hPercent: '2.67',
+                    high24h: '69310.00',
+                    low24h: '66427.53',
+                    fetchedAt: '2026-04-01T10:00:30.000Z',
+                    source: 'binance',
+                },
+            },
+        },
+    }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Unauthorized', type: error_response_dto_1.ErrorResponseDto }),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)('ticker/:symbol'),
     __param(0, (0, common_1.Param)('symbol')),
@@ -37,6 +63,8 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], MarketDataController.prototype, "getTicker", null);
 exports.MarketDataController = MarketDataController = __decorate([
+    (0, swagger_1.ApiTags)('Market Data'),
+    (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.Controller)('market'),
     __metadata("design:paramtypes", [market_data_service_1.MarketDataService])
 ], MarketDataController);

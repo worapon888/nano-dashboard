@@ -10,7 +10,8 @@ NanoDashboard เป็นผลงาน take-home assignment สำหรั�
 
 - Frontend URL: `https://nano-dashboard-pi.vercel.app/`
 - Backend URL: `https://dynamic-embrace-production.up.railway.app`
-- API docs URL: `N/A - ยังไม่ได้เปิด Swagger/OpenAPI; ดู API Summary ด้านล่าง`
+- API docs URL: `https://dynamic-embrace-production.up.railway.app/api/docs`
+- OpenAPI JSON: `https://dynamic-embrace-production.up.railway.app/api/docs-json`
 
 ## Overview
 

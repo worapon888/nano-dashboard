@@ -1,4 +1,4 @@
-import { memo, type CSSProperties } from 'react'
+import { memo, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import WidgetShell from '../../../shared/components/WidgetShell'
 import useColumnResize from '../hooks/useColumnResize'
@@ -38,6 +38,24 @@ const STORAGE_KEY = 'nanodashboard:trading-table:column-widths'
 
 function getColumnWidthVarName(columnKey: string) {
   return `--table-col-${columnKey}`
+}
+
+function getOrderDetails(row: OpenOrderItem) {
+  const fee = Math.max(0.45, row.totalUsd * 0.0008)
+  const notes =
+    row.status === 'Partial'
+      ? 'Partially filled and still waiting on matching liquidity.'
+      : row.status === 'Open'
+        ? 'Order is resting on the book and can still be edited or cancelled.'
+        : row.status === 'Filled'
+          ? 'Execution completed successfully and is ready for settlement review.'
+          : 'Order was cancelled before completion. Review the trigger conditions.'
+
+  return {
+    fee,
+    createdAt: row.createdAtLabel,
+    notes,
+  }
 }
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -147,7 +165,7 @@ function FilledBar({ filledPercent }: { filledPercent: number }) {
 type ResizableColumnHeaderProps = {
   col: ColumnDef
   isBeingResized: boolean
-  onResizeStart: (key: string, width: number, e: ReactPointerEvent) => void
+  onResizeStart: (key: string, width: number, e: ReactPointerEvent | ReactMouseEvent) => void
   onResetWidth: (key: string) => void
   width: number
 }
@@ -204,79 +222,134 @@ function ResizableColumnHeader({
 type TableRowProps = {
   row: OpenOrderItem
   columns: ColumnDef[]
+  expanded: boolean
+  onToggle: (rowId: string) => void
+  colSpan: number
 }
 
 const TableRow = memo(function TableRow({
   row,
   columns,
+  expanded,
+  onToggle,
+  colSpan,
 }: TableRowProps) {
+  const details = getOrderDetails(row)
+
   return (
-    <tr
-      className={[
-        'group/row border-b border-white/[0.04]',
-        'outline-none transition-colors duration-100',
-        'hover:bg-white/[0.025] active:bg-white/[0.04]',
-      ].join(' ')}
-    >
-      {columns.map((col) => {
-        const alignCls =
-          col.align === 'right'
-            ? 'text-right'
-            : col.align === 'center'
-              ? 'text-center'
-              : 'text-left'
+    <>
+      <tr
+        onClick={() => { onToggle(row.id) }}
+        aria-expanded={expanded}
+        className={[
+          'group/row cursor-pointer border-b border-white/[0.04]',
+          'outline-none transition-colors duration-100',
+          expanded ? 'bg-white/[0.035]' : 'hover:bg-white/[0.025] active:bg-white/[0.04]',
+        ].join(' ')}
+      >
+        {columns.map((col) => {
+          const alignCls =
+            col.align === 'right'
+              ? 'text-right'
+              : col.align === 'center'
+                ? 'text-center'
+                : 'text-left'
 
-        let cell: React.ReactNode
+          let cell: React.ReactNode
 
-        if (col.key === 'pair') {
-          cell = (
-            <span className="font-medium tracking-wide text-slate-100">{row.pair}</span>
-          )
-        } else if (col.key === 'side') {
-          cell = <SideBadge side={row.side} />
-        } else if (col.key === 'type') {
-          cell = <TypeBadge type={row.type} />
-        } else if (col.key === 'price') {
-          cell = (
-            <span className="tabular-nums text-slate-200">${formatPrice(row.price)}</span>
-          )
-        } else if (col.key === 'amount') {
-          cell = (
-            <span className="tabular-nums text-slate-300">{formatAmount(row.amount)}</span>
-          )
-        } else if (col.key === 'filledPercent') {
-          cell = <FilledBar filledPercent={row.filledPercent} />
-        } else if (col.key === 'totalUsd') {
-          cell = (
-            <span className="tabular-nums text-slate-200">
-              ${row.totalUsd.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
-          )
-        } else if (col.key === 'status') {
-          cell = <StatusBadge status={row.status} />
-        } else if (col.key === 'createdAtLabel') {
-          cell = (
-            <span className="text-[0.73rem] text-slate-500">{row.createdAtLabel}</span>
-          )
-        }
+          if (col.key === 'pair') {
+            cell = (
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={[
+                    'inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-[0.62rem] text-slate-400 transition-transform duration-300',
+                    expanded ? 'rotate-90 text-slate-200' : '',
+                  ].join(' ')}
+                >
+                  ›
+                </span>
+                <span className="font-medium tracking-wide text-slate-100">{row.pair}</span>
+              </div>
+            )
+          } else if (col.key === 'side') {
+            cell = <SideBadge side={row.side} />
+          } else if (col.key === 'type') {
+            cell = <TypeBadge type={row.type} />
+          } else if (col.key === 'price') {
+            cell = (
+              <span className="tabular-nums text-slate-200">${formatPrice(row.price)}</span>
+            )
+          } else if (col.key === 'amount') {
+            cell = (
+              <span className="tabular-nums text-slate-300">{formatAmount(row.amount)}</span>
+            )
+          } else if (col.key === 'filledPercent') {
+            cell = <FilledBar filledPercent={row.filledPercent} />
+          } else if (col.key === 'totalUsd') {
+            cell = (
+              <span className="tabular-nums text-slate-200">
+                ${row.totalUsd.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            )
+          } else if (col.key === 'status') {
+            cell = <StatusBadge status={row.status} />
+          } else if (col.key === 'createdAtLabel') {
+            cell = (
+              <span className="text-[0.73rem] text-slate-500">{row.createdAtLabel}</span>
+            )
+          }
 
-        return (
-          <td
-            key={col.key}
-            style={{
-              width: `var(${getColumnWidthVarName(col.key)})`,
-              maxWidth: `var(${getColumnWidthVarName(col.key)})`,
-            }}
-            className={`overflow-hidden text-ellipsis whitespace-nowrap px-3 py-2.5 text-sm ${alignCls}`}
-          >
-            {cell}
+          return (
+            <td
+              key={col.key}
+              style={{
+                width: `var(${getColumnWidthVarName(col.key)})`,
+                maxWidth: `var(${getColumnWidthVarName(col.key)})`,
+              }}
+              className={`overflow-hidden text-ellipsis whitespace-nowrap px-3 py-2.5 text-sm ${alignCls}`}
+            >
+              {cell}
+            </td>
+          )
+        })}
+      </tr>
+      {expanded ? (
+        <tr className="border-b border-white/[0.04]">
+          <td colSpan={colSpan} className="p-0">
+            <div className="grid overflow-hidden transition-all duration-300 ease-out grid-rows-[1fr] opacity-100">
+              <div className="min-h-0">
+                <div className="border-t border-white/[0.03] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] px-4 py-4">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <div className="rounded-xl border border-white/8 bg-[#0b0f14] px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.18em] text-slate-500">Order ID</p>
+                      <p className="mt-2 text-sm font-medium text-white">{row.id}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-[#0b0f14] px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.18em] text-slate-500">Fee</p>
+                      <p className="mt-2 text-sm font-medium text-white">
+                        ${details.fee.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-[#0b0f14] px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.18em] text-slate-500">Created At</p>
+                      <p className="mt-2 text-sm font-medium text-white">{details.createdAt}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-[#0b0f14] px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.18em] text-slate-500">Notes</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{details.notes}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </td>
-        )
-      })}
-    </tr>
+        </tr>
+      ) : null}
+    </>
   )
 })
 
@@ -293,18 +366,31 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
     minWidth: COL_MIN_WIDTH,
     storageKey: STORAGE_KEY,
   })
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
 
   const totalMinWidth = COLUMNS.reduce((sum, col) => sum + columnWidths[col.key], 0)
-  const tableColumnStyle = {
-    ...Object.fromEntries(
-      COLUMNS.map((col) => [getColumnWidthVarName(col.key), `${columnWidths[col.key]}px`]),
-    ),
-    tableLayout: 'fixed',
-    width: '100%',
-    minWidth: totalMinWidth,
-  } as CSSProperties
+  const tableColumnStyle = useMemo(
+    () =>
+      ({
+        ...Object.fromEntries(
+          COLUMNS.map((col) => [getColumnWidthVarName(col.key), `${columnWidths[col.key]}px`]),
+        ),
+        tableLayout: 'fixed',
+        width: '100%',
+        minWidth: totalMinWidth,
+      }) as CSSProperties,
+    [columnWidths, totalMinWidth],
+  )
 
   const colSpan = COLUMNS.length
+
+  function handleToggleRow(rowId: string) {
+    if (isWidgetResizing) {
+      return
+    }
+
+    setExpandedRowId((current) => (current === rowId ? null : rowId))
+  }
 
   return (
     /*
@@ -345,7 +431,14 @@ function TableContainer({ rows, isWidgetResizing }: TableContainerProps) {
         {/* ── TableBody ────────────────────────────────────────────────── */}
         <tbody>
           {rows.map((row) => (
-            <TableRow key={row.id} row={row} columns={COLUMNS} />
+            <TableRow
+              key={row.id}
+              row={row}
+              columns={COLUMNS}
+              expanded={expandedRowId === row.id}
+              onToggle={handleToggleRow}
+              colSpan={colSpan}
+            />
           ))}
 
           {rows.length === 0 ? (

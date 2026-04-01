@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 
 export type ColumnWidths = Record<string, number>
 
@@ -69,17 +69,20 @@ function useColumnResize({
   }, [])
 
   const startResize = useCallback(
-    (columnKey: string, currentWidth: number, event: ReactPointerEvent) => {
-      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+    (
+      columnKey: string,
+      currentWidth: number,
+      event: ReactPointerEvent | ReactMouseEvent,
+    ) => {
+      if ('button' in event && event.button !== 0) {
         return
       }
 
       event.preventDefault()
       event.stopPropagation()
-      event.currentTarget.setPointerCapture?.(event.pointerId)
 
       resizeStateRef.current = {
-        pointerId: event.pointerId,
+        pointerId: 'pointerId' in event ? event.pointerId : -1,
         columnKey,
         startX: event.clientX,
         startWidth: currentWidth,
@@ -99,9 +102,9 @@ function useColumnResize({
         )
       }
 
-      const handlePointerMove = (e: PointerEvent) => {
+      const handleMouseMove = (e: MouseEvent) => {
         const state = resizeStateRef.current
-        if (!state || e.pointerId !== state.pointerId) return
+        if (!state) return
         const delta = e.clientX - state.startX
         const nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
 
@@ -119,11 +122,7 @@ function useColumnResize({
         }
       }
 
-      const cleanup = (pointerId?: number) => {
-        if (pointerId !== undefined && resizeStateRef.current?.pointerId !== pointerId) {
-          return
-        }
-
+      const cleanup = () => {
         resizeStateRef.current = null
         setResizingColumn(null)
         if (frameRef.current !== null) {
@@ -135,24 +134,18 @@ function useColumnResize({
         )
         document.body.style.cursor = savedCursor
         document.body.style.userSelect = savedUserSelect
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', handlePointerUp)
-        window.removeEventListener('pointercancel', handlePointerCancel)
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
         cleanupRef.current = null
       }
 
-      const handlePointerUp = (e: PointerEvent) => {
-        cleanup(e.pointerId)
-      }
-
-      const handlePointerCancel = (e: PointerEvent) => {
-        cleanup(e.pointerId)
+      const handleMouseUp = () => {
+        cleanup()
       }
 
       cleanupRef.current = cleanup
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', handlePointerUp)
-      window.addEventListener('pointercancel', handlePointerCancel)
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
     },
     [minWidth],
   )

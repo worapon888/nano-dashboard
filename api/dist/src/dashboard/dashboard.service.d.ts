@@ -1,3 +1,4 @@
+import { BinanceService } from '../binance/binance.service';
 import { MarketDataService } from '../market-data/market-data.service';
 import { OrdersService } from '../orders/orders.service';
 import { PnlService } from '../pnl/pnl.service';
@@ -7,13 +8,31 @@ import { DashboardSummaryDto } from './dto/dashboard-summary.dto';
 import { InternalService } from '../internal/internal.service';
 export declare class DashboardService {
     private readonly usersService;
+    private readonly binanceService;
     private readonly marketDataService;
     private readonly ordersService;
     private readonly pnlService;
     private readonly redisService;
     private readonly internalService?;
     private readonly logger;
-    constructor(usersService: UsersService, marketDataService: MarketDataService, ordersService: OrdersService, pnlService: PnlService, redisService: RedisService, internalService?: InternalService | undefined);
+    constructor(usersService: UsersService, binanceService: BinanceService, marketDataService: MarketDataService, ordersService: OrdersService, pnlService: PnlService, redisService: RedisService, internalService?: InternalService | undefined);
+    getAggregatedDashboard(): Promise<{
+        users: {
+            total: number;
+            active: number;
+            list: Awaited<ReturnType<UsersService['getDashboardUsersSnapshot']>>['list'];
+        };
+        market: {
+            BTCUSDT: {
+                price: string;
+                cachedAt: string;
+            };
+            ETHUSDT: {
+                price: string;
+                cachedAt: string;
+            };
+        };
+    }>;
     getSummary(userId: string, rangeInput?: string, volumeTfInput?: string, pnlRangeInput?: string): Promise<DashboardSummaryDto>;
     private buildSummary;
     private writeSummaryCaches;

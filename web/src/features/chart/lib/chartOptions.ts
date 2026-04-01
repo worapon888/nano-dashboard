@@ -221,6 +221,24 @@ export function buildChartOptions({
     "#047857",
     "#475569",
   ];
+  const portfolioValues = isPortfolioBreakdown && Array.isArray(values) ? values : [];
+  const portfolioLabels = isPortfolioBreakdown && Array.isArray(labels) ? labels : [];
+  const dominantSliceIndex =
+    portfolioValues.length > 0
+      ? portfolioValues.reduce(
+          (largestIndex, currentValue, currentIndex, source) =>
+            currentValue > (source[largestIndex] ?? Number.NEGATIVE_INFINITY)
+              ? currentIndex
+              : largestIndex,
+          0,
+        )
+      : -1;
+  const dominantSliceLabel =
+    dominantSliceIndex >= 0
+      ? portfolioLabels[dominantSliceIndex] ?? ""
+      : "";
+  const dominantSliceValue =
+    dominantSliceIndex >= 0 ? portfolioValues[dominantSliceIndex] ?? 0 : 0;
 
   return stripUndefined({
     chart: {
@@ -472,8 +490,10 @@ export function buildChartOptions({
         : isPortfolioBreakdown
           ? ({ series, seriesIndex, w }) => {
               const label = w.globals.labels?.[seriesIndex] ?? "";
-              const value = Math.round(series[seriesIndex] ?? 0);
-              return `<div style="padding:6px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(8,12,18,0.96);box-shadow:0 12px 28px rgba(0,0,0,0.28);color:#e2e8f0;font-size:12px;font-weight:500;letter-spacing:0.01em;">${label} · ${value}%</div>`;
+              const value = Number(series[seriesIndex] ?? 0);
+              const percentage = `${value.toFixed(0)}%`;
+              const dominanceValue = `${value.toFixed(2)}% dominance`;
+              return `<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(8,12,18,0.96);box-shadow:0 12px 28px rgba(0,0,0,0.28);color:#e2e8f0;font-size:12px;line-height:1.4;"><div style="font-weight:600;color:#f8fafc;">${label}</div><div style="margin-top:2px;color:rgba(226,232,240,0.82);">${percentage}</div><div style="margin-top:2px;color:rgba(148,163,184,0.9);font-size:11px;">${dominanceValue}</div></div>`;
             }
           : undefined,
       y: isDailyPnlColumn
@@ -697,32 +717,23 @@ export function buildChartOptions({
             offsetY: 2,
             donut: {
               size: "74%",
-              background: "transparent",
-              labels: {
-                show: true,
-                name: {
-                  show: false,
-                  offsetY: -6,
-                  color: "rgba(226,232,235,0.62)",
-                  fontSize: "10px",
-                  fontWeight: 600,
-                },
-                value: {
+                background: "transparent",
+                labels: {
                   show: true,
-                  offsetY: -2,
-                  color: "#E5E7EB",
-                  fontSize: "22px",
-                  fontWeight: 700,
-                  formatter: (value: string) => `${Number(value).toFixed(0)}%`,
-                },
-                total: {
+                  name: {
+                  show: false,
+                  },
+                  value: {
+                  show: false,
+                  },
+                  total: {
                   show: true,
                   showAlways: true,
-                  label: "Allocation",
+                  label: dominantSliceLabel || "—",
                   color: "rgba(226,232,235,0.62)",
                   fontSize: "11px",
                   fontWeight: 500,
-                  formatter: () => "100%",
+                  formatter: () => `${dominantSliceValue.toFixed(0)}%`,
                 },
               },
             },
@@ -830,7 +841,17 @@ export function buildChartOptions({
       },
       fontSize: "11px",
       fontWeight: 400,
-      formatter: (seriesName: string) => seriesName,
+      formatter: (seriesName: string, opts?: { seriesIndex: number }) => {
+        const seriesIndex = opts?.seriesIndex ?? -1;
+        const value =
+          seriesIndex >= 0 && seriesIndex < portfolioValues.length
+            ? portfolioValues[seriesIndex]
+            : null;
+
+        return value === null
+          ? seriesName
+          : `${seriesName} ${value.toFixed(0)}%`;
+      },
     },
   });
 }

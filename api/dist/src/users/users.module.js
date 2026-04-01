@@ -12,16 +12,17 @@ const auth_module_1 = require("../auth/auth.module");
 const prisma_module_1 = require("../prisma/prisma.module");
 const redis_module_1 = require("../redis/redis.module");
 const users_controller_1 = require("./users.controller");
+const users_gateway_1 = require("./users.gateway");
 const users_service_1 = require("./users.service");
 let UsersModule = class UsersModule {
 };
 exports.UsersModule = UsersModule;
 exports.UsersModule = UsersModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, redis_module_1.RedisModule, auth_module_1.AuthModule],
+        imports: [prisma_module_1.PrismaModule, redis_module_1.RedisModule, (0, common_1.forwardRef)(() => auth_module_1.AuthModule)],
         controllers: [users_controller_1.UsersController],
-        providers: [users_service_1.UsersService],
-        exports: [users_service_1.UsersService],
+        providers: [users_service_1.UsersService, users_gateway_1.UsersGateway],
+        exports: [users_service_1.UsersService, users_gateway_1.UsersGateway],
     })
 ], UsersModule);
 //# sourceMappingURL=users.module.js.map

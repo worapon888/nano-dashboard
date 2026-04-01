@@ -1,7 +1,6 @@
-import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
-import type { IncomingMessage } from 'http';
-import { Server, WebSocket } from 'ws';
+import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit } from '@nestjs/websockets';
+import { Socket } from 'socket.io';
 import { EventPayload, MarketEventsPublisher, UserEventsPublisher, WsConnectionsProvider } from './events.tokens';
 export declare class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, UserEventsPublisher, MarketEventsPublisher, WsConnectionsProvider {
     private readonly jwtService;
@@ -11,22 +10,14 @@ export declare class EventsGateway implements OnGatewayInit, OnGatewayConnection
     private connectionCount;
     private readonly connectedClients;
     private readonly authenticatedClients;
-    private readonly clientsByRoom;
-    afterInit(_server: Server): void;
-    handleConnection(client: WebSocket, request: IncomingMessage): Promise<void>;
-    handleDisconnect(client: WebSocket): void;
+    afterInit(): void;
+    handleConnection(client: Socket): Promise<void>;
+    handleDisconnect(client: Socket): void;
     getConnectionCount(): number;
     publishUserCreated(user: EventPayload): void;
     publishUserUpdated(user: EventPayload): void;
     publishTicker(event: string, ticker: EventPayload): void;
-    private broadcast;
-    private broadcastToAdmins;
-    private broadcastToRoom;
-    private broadcastToClients;
     private authenticateClient;
     private extractToken;
-    private closeUnauthorizedClient;
-    private addClientToRoom;
-    private removeClientFromRoom;
     private getUserRoom;
 }

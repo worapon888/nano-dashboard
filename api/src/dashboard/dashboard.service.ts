@@ -4,6 +4,7 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { BinanceService } from '../binance/binance.service';
 import {
   MarketDataService,
 } from '../market-data/market-data.service';
@@ -119,6 +120,7 @@ export class DashboardService {
 
   constructor(
     private readonly usersService: UsersService,
+    private readonly binanceService: BinanceService,
     private readonly marketDataService: MarketDataService,
     private readonly ordersService: OrdersService,
     private readonly pnlService: PnlService,
@@ -126,6 +128,38 @@ export class DashboardService {
     @Optional()
     private readonly internalService?: InternalService,
   ) {}
+
+  async getAggregatedDashboard(): Promise<{
+    users: {
+      total: number;
+      active: number;
+      list: Awaited<ReturnType<UsersService['getDashboardUsersSnapshot']>>['list'];
+    };
+    market: {
+      BTCUSDT: { price: string; cachedAt: string };
+      ETHUSDT: { price: string; cachedAt: string };
+    };
+  }> {
+    const [users, btcPrice, ethPrice] = await Promise.all([
+      this.usersService.getDashboardUsersSnapshot(),
+      this.binanceService.getPrice('BTCUSDT'),
+      this.binanceService.getPrice('ETHUSDT'),
+    ]);
+
+    return {
+      users,
+      market: {
+        BTCUSDT: {
+          price: btcPrice.price,
+          cachedAt: btcPrice.fetchedAt,
+        },
+        ETHUSDT: {
+          price: ethPrice.price,
+          cachedAt: ethPrice.fetchedAt,
+        },
+      },
+    };
+  }
 
   async getSummary(
     userId: string,

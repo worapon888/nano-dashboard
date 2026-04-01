@@ -15,6 +15,7 @@ var DashboardService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardService = void 0;
 const common_1 = require("@nestjs/common");
+const binance_service_1 = require("../binance/binance.service");
 const market_data_service_1 = require("../market-data/market-data.service");
 const orders_service_1 = require("../orders/orders.service");
 const pnl_service_1 = require("../pnl/pnl.service");
@@ -28,19 +29,41 @@ const DASHBOARD_STALE_CACHE_TTL_SECONDS = 300;
 const DASHBOARD_SECTION_TIMEOUT_MS = 7000;
 let DashboardService = DashboardService_1 = class DashboardService {
     usersService;
+    binanceService;
     marketDataService;
     ordersService;
     pnlService;
     redisService;
     internalService;
     logger = new common_1.Logger(DashboardService_1.name);
-    constructor(usersService, marketDataService, ordersService, pnlService, redisService, internalService) {
+    constructor(usersService, binanceService, marketDataService, ordersService, pnlService, redisService, internalService) {
         this.usersService = usersService;
+        this.binanceService = binanceService;
         this.marketDataService = marketDataService;
         this.ordersService = ordersService;
         this.pnlService = pnlService;
         this.redisService = redisService;
         this.internalService = internalService;
+    }
+    async getAggregatedDashboard() {
+        const [users, btcPrice, ethPrice] = await Promise.all([
+            this.usersService.getDashboardUsersSnapshot(),
+            this.binanceService.getPrice('BTCUSDT'),
+            this.binanceService.getPrice('ETHUSDT'),
+        ]);
+        return {
+            users,
+            market: {
+                BTCUSDT: {
+                    price: btcPrice.price,
+                    cachedAt: btcPrice.fetchedAt,
+                },
+                ETHUSDT: {
+                    price: ethPrice.price,
+                    cachedAt: ethPrice.fetchedAt,
+                },
+            },
+        };
     }
     async getSummary(userId, rangeInput, volumeTfInput, pnlRangeInput) {
         const range = this.normalizeTrendRange(rangeInput);
@@ -646,8 +669,9 @@ let DashboardService = DashboardService_1 = class DashboardService {
 exports.DashboardService = DashboardService;
 exports.DashboardService = DashboardService = DashboardService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(5, (0, common_1.Optional)()),
+    __param(6, (0, common_1.Optional)()),
     __metadata("design:paramtypes", [users_service_1.UsersService,
+        binance_service_1.BinanceService,
         market_data_service_1.MarketDataService,
         orders_service_1.OrdersService,
         pnl_service_1.PnlService,

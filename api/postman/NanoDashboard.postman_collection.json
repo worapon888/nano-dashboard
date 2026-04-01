@@ -1,0 +1,497 @@
+{
+  "info": {
+    "name": "NanoDashboard Backend",
+    "_postman_id": "f3fca345-78d8-4c67-b3bc-1af97bfc91e6",
+    "description": "Postman collection for the NanoDashboard NestJS backend. Includes authentication, users, market data, and dashboard endpoints with example payloads.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "symbol",
+      "value": "BTCUSDT"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.user@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"Demo User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register a new account."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"new.user@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"Demo User\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "register"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User registered successfully\",\n  \"data\": {\n    \"id\": \"c0a8012e-d8b9-4fcf-9f75-2b0d44cc0f31\",\n    \"email\": \"new.user@example.com\",\n    \"displayName\": \"Demo User\",\n    \"role\": \"USER\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-04-01T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Authenticate and receive access and refresh tokens."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"accessToken\": \"{{accessToken}}\",\n    \"refreshToken\": \"sample-refresh-token\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": \"15m\",\n    \"refreshExpiresIn\": \"7d\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Get the authenticated user profile."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Authenticated user retrieved successfully\",\n  \"data\": {\n    \"id\": \"c0a8012e-d8b9-4fcf-9f75-2b0d44cc0f31\",\n    \"email\": \"admin@example.com\",\n    \"displayName\": \"Admin User\",\n    \"role\": \"ADMIN\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-04-01T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Refresh Tokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Exchange a valid refresh token for a new access token pair."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Tokens refreshed successfully\",\n  \"data\": {\n    \"accessToken\": \"{{accessToken}}\",\n    \"refreshToken\": \"{{refreshToken}}\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": \"15m\",\n    \"refreshExpiresIn\": \"7d\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Users retrieved successfully\",\n  \"data\": [\n    {\n      \"id\": \"c0a8012e-d8b9-4fcf-9f75-2b0d44cc0f31\",\n      \"email\": \"admin@example.com\",\n      \"displayName\": \"Admin User\",\n      \"role\": \"ADMIN\",\n      \"isActive\": true,\n      \"createdAt\": \"2026-04-01T10:00:00.000Z\",\n      \"updatedAt\": \"2026-04-01T10:10:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"page\": 1,\n    \"limit\": 10,\n    \"total\": 1,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get User By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User retrieved successfully\",\n  \"data\": {\n    \"id\": \"{{userId}}\",\n    \"email\": \"user@example.com\",\n    \"displayName\": \"Demo User\",\n    \"role\": \"USER\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-04-01T10:00:00.000Z\",\n    \"updatedAt\": \"2026-04-01T10:10:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Updated Name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User updated successfully\",\n  \"data\": {\n    \"id\": \"{{userId}}\",\n    \"email\": \"user@example.com\",\n    \"displayName\": \"Updated Name\",\n    \"role\": \"USER\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-04-01T10:00:00.000Z\",\n    \"updatedAt\": \"2026-04-01T10:15:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User deleted successfully\",\n  \"data\": null\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Market Data",
+      "item": [
+        {
+          "name": "Get Ticker",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/market/ticker/{{symbol}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "market",
+                "ticker",
+                "{{symbol}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Ticker retrieved successfully\",\n  \"data\": {\n    \"symbol\": \"BTCUSDT\",\n    \"price\": \"68432.10\",\n    \"volume24h\": \"23100.50\",\n    \"priceChange24h\": \"1780.00\",\n    \"priceChange24hPercent\": \"2.67\",\n    \"high24h\": \"69310.00\",\n    \"low24h\": \"66427.53\",\n    \"fetchedAt\": \"2026-04-01T10:00:30.000Z\",\n    \"source\": \"binance\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Aggregated Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"users\": {\n    \"total\": 2,\n    \"active\": 2,\n    \"list\": [\n      {\n        \"id\": \"c0a8012e-d8b9-4fcf-9f75-2b0d44cc0f31\",\n        \"email\": \"admin@example.com\",\n        \"displayName\": \"Admin User\",\n        \"role\": \"ADMIN\",\n        \"isActive\": true,\n        \"createdAt\": \"2026-04-01T10:00:00.000Z\",\n        \"updatedAt\": \"2026-04-01T10:10:00.000Z\"\n      }\n    ]\n  },\n  \"market\": {\n    \"BTCUSDT\": {\n      \"price\": \"68432.10\",\n      \"cachedAt\": \"2026-04-01T10:00:30.000Z\"\n    },\n    \"ETHUSDT\": {\n      \"price\": \"3521.88\",\n      \"cachedAt\": \"2026-04-01T10:00:31.000Z\"\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary?range=1h&volumeTf=1h&pnlRange=week",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "1h"
+                },
+                {
+                  "key": "volumeTf",
+                  "value": "1h"
+                },
+                {
+                  "key": "pnlRange",
+                  "value": "week"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dashboard summary retrieved successfully\",\n  \"data\": {\n    \"userCount\": 2,\n    \"topMovers\": [\n      {\n        \"symbol\": \"BTCUSDT\",\n        \"price\": \"68432.10\",\n        \"volume24h\": \"23100.50\",\n        \"priceChange24h\": \"1780.00\",\n        \"high24h\": \"69310.00\",\n        \"low24h\": \"66427.53\",\n        \"fetchedAt\": \"2026-04-01T10:00:30.000Z\"\n      }\n    ],\n    \"marketOverview\": {\n      \"btcDominance\": 52.31,\n      \"fearGreedIndex\": 86\n    },\n    \"marketShare\": [\n      {\n        \"symbol\": \"BTC\",\n        \"dominance\": 52.31\n      },\n      {\n        \"symbol\": \"ETH\",\n        \"dominance\": 31.2\n      },\n      {\n        \"symbol\": \"OTHERS\",\n        \"dominance\": 16.49\n      }\n    ],\n    \"stale\": false,\n    \"generatedAt\": \"2026-04-01T10:00:30.000Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -6,10 +6,10 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { WsAdapter } from '@nestjs/platform-ws';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
-import WebSocket, { RawData } from 'ws';
+import { io as createSocketClient, Socket as SocketClient } from 'socket.io-client';
 import { AppModule } from '../src/app.module';
 import { AuthModule } from '../src/auth/auth.module';
 import {
@@ -412,9 +412,9 @@ type WsEnvelope = {
   data: Record<string, unknown>;
 };
 
-const waitForWebSocketOpen = (socket: WebSocket): Promise<void> =>
+const waitForSocketConnect = (socket: SocketClient): Promise<void> =>
   new Promise((resolve, reject) => {
-    const onOpen = () => {
+    const onConnect = () => {
       cleanup();
       resolve();
     };
@@ -423,12 +423,12 @@ const waitForWebSocketOpen = (socket: WebSocket): Promise<void> =>
       reject(error);
     };
     const cleanup = () => {
-      socket.off('open', onOpen);
-      socket.off('error', onError);
+      socket.off('connect', onConnect);
+      socket.off('connect_error', onError);
     };
 
-    socket.on('open', onOpen);
-    socket.on('error', onError);
+    socket.on('connect', onConnect);
+    socket.on('connect_error', onError);
   });
 
 const waitForCondition = async (
@@ -450,13 +450,9 @@ const waitForCondition = async (
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-const waitForWebSocketClose = (
-  socket: WebSocket,
-): Promise<{ code: number; reason: string }> =>
+const waitForSocketDisconnect = (socket: SocketClient): Promise<void> =>
   new Promise((resolve) => {
-    socket.once('close', (code, reason) => {
-      resolve({ code, reason: reason.toString() });
-    });
+    socket.once('disconnect', () => resolve());
   });
 
 describe('Users CRUD (e2e)', () => {
@@ -513,7 +509,7 @@ describe('Users CRUD (e2e)', () => {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
-    app.useWebSocketAdapter(new WsAdapter(app));
+    app.useWebSocketAdapter(new IoAdapter(app));
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -557,16 +553,16 @@ describe('Users CRUD (e2e)', () => {
       .expect(404);
   });
 
-  it('enforces admin-only access on list, detail, update, and delete endpoints', async () => {
+  it('allows authenticated reads but enforces owner-or-admin checks on update and delete endpoints', async () => {
     await request(app.getHttpServer())
       .get('/api/users')
       .set('Authorization', 'Bearer user-token')
-      .expect(403);
+      .expect(200);
 
     await request(app.getHttpServer())
       .get(`/api/users/${adminId}`)
       .set('Authorization', 'Bearer user-token')
-      .expect(403);
+      .expect(200);
 
     await request(app.getHttpServer())
       .patch(`/api/users/${adminId}`)
@@ -884,7 +880,7 @@ describe('Dashboard Summary (e2e)', () => {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
-    app.useWebSocketAdapter(new WsAdapter(app));
+    app.useWebSocketAdapter(new IoAdapter(app));
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -1112,7 +1108,7 @@ describe('Market Data Ticker Flow (e2e)', () => {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
-    app.useWebSocketAdapter(new WsAdapter(app));
+    app.useWebSocketAdapter(new IoAdapter(app));
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -1373,7 +1369,6 @@ describe('Auth endpoints (e2e)', () => {
       })
       .expect(409);
 
-    expect(response.body.success).toBe(false);
     expect(response.body.statusCode).toBe(409);
     expect(String(response.body.message).toLowerCase()).toContain('email');
   });
@@ -1390,7 +1385,6 @@ describe('Auth endpoints (e2e)', () => {
       })
       .expect(409);
 
-    expect(response.body.success).toBe(false);
     expect(response.body.statusCode).toBe(409);
     expect(String(response.body.message).toLowerCase()).toContain('email');
   });
@@ -1401,7 +1395,6 @@ describe('Auth endpoints (e2e)', () => {
       .send({ email: 'not-an-email', password: '123' })
       .expect(400);
 
-    expect(response.body.success).toBe(false);
     expect(response.body.statusCode).toBe(400);
     expect(Array.isArray(response.body.message)).toBe(true);
   });
@@ -1426,7 +1419,6 @@ describe('Auth endpoints (e2e)', () => {
       .send({ email: 'existing@example.com', password: 'WrongPass999!' })
       .expect(401);
 
-    expect(response.body.success).toBe(false);
     expect(response.body.statusCode).toBe(401);
   });
 
@@ -1436,7 +1428,6 @@ describe('Auth endpoints (e2e)', () => {
       .send({ email: 'nobody@example.com', password: testPassword })
       .expect(401);
 
-    expect(response.body.success).toBe(false);
     expect(response.body.statusCode).toBe(401);
   });
 
@@ -1445,7 +1436,6 @@ describe('Auth endpoints (e2e)', () => {
       .get('/api/auth/me')
       .expect(401);
 
-    expect(response.body.success).toBe(false);
     expect(response.body.statusCode).toBe(401);
   });
 
@@ -1480,10 +1470,10 @@ describe('WebSocket realtime events (integration)', () => {
   let users: MockUser[];
   let prismaMock: ReturnType<typeof createPrismaMock>;
   let redisMock: ReturnType<typeof createRedisMock>;
-  let authenticatedWsClients: WebSocket[];
-  let anonymousWsClient: WebSocket;
+  let authenticatedWsClients: SocketClient[];
+  let anonymousWsClient: SocketClient;
   let wsMessages: WsEnvelope[][];
-  let wsBaseUrl: string;
+  let appUrl: string;
   let jwtService: JwtService;
 
   beforeAll(() => {
@@ -1536,7 +1526,7 @@ describe('WebSocket realtime events (integration)', () => {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
-    app.useWebSocketAdapter(new WsAdapter(app));
+    app.useWebSocketAdapter(new IoAdapter(app));
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -1548,9 +1538,7 @@ describe('WebSocket realtime events (integration)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
 
     await app.listen({ port: 0, host: '127.0.0.1' });
-
-    const appUrl = await app.getUrl();
-    wsBaseUrl = appUrl.replace(/^http/, 'ws');
+    appUrl = await app.getUrl();
     jwtService = new JwtService({ secret: 'test-secret' });
     const authenticatedTokens = await Promise.all([
       jwtService.signAsync(authPayloads['admin-token']),
@@ -1559,23 +1547,35 @@ describe('WebSocket realtime events (integration)', () => {
 
     wsMessages = [[], [], []];
     authenticatedWsClients = authenticatedTokens.map((token, index) => {
-      const client = new WebSocket(`${wsBaseUrl}/ws?token=${encodeURIComponent(token)}`);
+      const client = createSocketClient(`${appUrl}/users`, {
+        transports: ['websocket'],
+        reconnection: false,
+      });
 
-      client.on('message', (payload: RawData) => {
-        wsMessages[index].push(JSON.parse(payload.toString()) as WsEnvelope);
+      client.on('user.created', (payload: Record<string, unknown>) => {
+        wsMessages[index].push({ event: 'user.created', data: payload });
+      });
+      client.on('user.updated', (payload: Record<string, unknown>) => {
+        wsMessages[index].push({ event: 'user.updated', data: payload });
       });
 
       return client;
     });
 
-    anonymousWsClient = new WebSocket(`${wsBaseUrl}/ws`);
-    anonymousWsClient.on('message', (payload: RawData) => {
-      wsMessages[2].push(JSON.parse(payload.toString()) as WsEnvelope);
+    anonymousWsClient = createSocketClient(`${appUrl}/users`, {
+      transports: ['websocket'],
+      reconnection: false,
+    });
+    anonymousWsClient.on('user.created', (payload: Record<string, unknown>) => {
+      wsMessages[2].push({ event: 'user.created', data: payload });
+    });
+    anonymousWsClient.on('user.updated', (payload: Record<string, unknown>) => {
+      wsMessages[2].push({ event: 'user.updated', data: payload });
     });
 
     await Promise.all([
-      ...authenticatedWsClients.map((client) => waitForWebSocketOpen(client)),
-      waitForWebSocketOpen(anonymousWsClient),
+      ...authenticatedWsClients.map((client) => waitForSocketConnect(client)),
+      waitForSocketConnect(anonymousWsClient),
     ]);
   });
 
@@ -1588,19 +1588,16 @@ describe('WebSocket realtime events (integration)', () => {
     if (clients.length) {
       await Promise.all(
         clients.map(
-          (client) =>
-            new Promise<void>((resolve) => {
-              if (
-                client.readyState === WebSocket.CLOSED ||
-                client.readyState === WebSocket.CLOSING
-              ) {
-                resolve();
-                return;
-              }
-
-              client.once('close', () => resolve());
+          async (client) => {
+            if (!client.connected) {
               client.close();
-            }),
+              return;
+            }
+
+            const disconnectPromise = waitForSocketDisconnect(client);
+            client.close();
+            await disconnectPromise;
+          },
         ),
       );
     }
@@ -1610,7 +1607,7 @@ describe('WebSocket realtime events (integration)', () => {
     }
   });
 
-    it('broadcasts exactly one safe user.created event to admin websocket clients only after successful registration', async () => {
+    it('broadcasts exactly one safe user.created event to every connected /users client after successful registration', async () => {
       expect(wsMessages[0]).toHaveLength(0);
       expect(wsMessages[1]).toHaveLength(0);
       expect(wsMessages[2]).toHaveLength(0);
@@ -1641,27 +1638,26 @@ describe('WebSocket realtime events (integration)', () => {
       expect(createdEvents[0].data).toMatchObject({
         id: response.body.data.id,
         email: 'streamed@example.com',
-        displayName: 'Streamed User',
+        name: 'Streamed User',
       });
       expect(createdEvents[0].data.passwordHash).toBeUndefined();
 
       expect(
-        wsMessages[1].some((message) => message.event === 'user.created'),
-      ).toBe(false);
-
+        wsMessages[1].filter((message) => message.event === 'user.created'),
+      ).toHaveLength(1);
       expect(
-        wsMessages[2].some((message) => message.event === 'user.created'),
-      ).toBe(false);
+        wsMessages[2].filter((message) => message.event === 'user.created'),
+      ).toHaveLength(1);
     });
 
-    it('broadcasts exactly one safe user.updated event to admin clients and the affected user only for successful updates', async () => {
+    it('broadcasts exactly one safe user.updated event to every connected /users client for successful updates', async () => {
       const failedResponse = await request(app.getHttpServer())
         .patch('/api/users/99999999-9999-9999-9999-999999999999')
         .set('Authorization', 'Bearer admin-token')
       .send({ displayName: 'No Event' })
       .expect(404);
 
-    expect(failedResponse.body.success).toBe(false);
+    expect(failedResponse.body.statusCode).toBe(404);
     await delay(150);
     expect(
       wsMessages.slice(0, 2).some((messages) =>
@@ -1675,18 +1671,17 @@ describe('WebSocket realtime events (integration)', () => {
         .send({ displayName: 'Realtime User' })
         .expect(200);
 
-      await waitForCondition(
-        () =>
-          wsMessages[0].filter((message) => message.event === 'user.updated')
-            .length === 1 &&
-          wsMessages[1].filter((message) => message.event === 'user.updated')
-            .length === 1,
-        1000,
-      );
+      await waitForCondition(() => {
+        return wsMessages.every(
+          (messages) =>
+            messages.filter((message) => message.event === 'user.updated')
+              .length === 1,
+        );
+      }, 1000);
 
       await delay(150);
 
-      wsMessages.slice(0, 2).forEach((messages) => {
+      wsMessages.forEach((messages) => {
         const updatedEvents = messages.filter(
           (message) => message.event === 'user.updated',
         );
@@ -1695,21 +1690,36 @@ describe('WebSocket realtime events (integration)', () => {
       expect(updatedEvents[0].data).toMatchObject({
         id: response.body.data.id,
         email: response.body.data.email,
-        displayName: 'Realtime User',
+        name: 'Realtime User',
       });
       expect(updatedEvents[0].data.passwordHash).toBeUndefined();
     });
 
-      expect(
-        wsMessages[2].some((message) => message.event === 'user.updated'),
-      ).toBe(false);
     });
 
-  it('gracefully closes websocket connections when a provided token is invalid', async () => {
-    const invalidClient = new WebSocket(`${wsBaseUrl}/ws?token=not-a-real-token`);
-    const closeResult = await waitForWebSocketClose(invalidClient);
+  it('emits ws.error and disconnects when a provided token is invalid on /ws', async () => {
+    const invalidClient = createSocketClient(appUrl, {
+      path: '/ws',
+      transports: ['websocket'],
+      reconnection: false,
+      auth: {
+        token: 'not-a-real-token',
+      },
+    });
 
-    expect(closeResult.code).toBe(4401);
-    expect(closeResult.reason).toContain('Invalid websocket credentials');
+    const errorMessage = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timed out waiting for ws.error'));
+      }, 1000);
+
+      invalidClient.on('ws.error', (payload: { message?: string }) => {
+        clearTimeout(timeout);
+        resolve(payload.message ?? '');
+      });
+      invalidClient.on('connect_error', reject);
+    });
+
+    expect(errorMessage).toContain('Invalid websocket credentials');
+    invalidClient.close();
   });
 });

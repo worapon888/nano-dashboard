@@ -24,17 +24,11 @@ describe('TradingTable pointer column resize', () => {
       clientX: 100,
       clientY: 40,
     })
-    fireEvent.pointerMove(window, {
-      pointerId: 1,
-      pointerType: 'mouse',
-      isPrimary: true,
+    fireEvent.mouseMove(window, {
       clientX: 160,
       clientY: 40,
     })
-    fireEvent.pointerUp(window, {
-      pointerId: 1,
-      pointerType: 'mouse',
-      isPrimary: true,
+    fireEvent.mouseUp(window, {
       clientX: 160,
       clientY: 40,
     })
@@ -52,5 +46,28 @@ describe('TradingTable pointer column resize', () => {
 
     expect(screen.getAllByRole('row').length).toBeGreaterThan(1)
     expect(screen.getAllByText('Status').length).toBeGreaterThan(0)
+  })
+
+  it('toggles an expandable detail panel when clicking a row', async () => {
+    render(<TradingTable title="Open Orders" data={openOrdersSummaryMock} />)
+
+    const pairCell = screen.getAllByText('BTC/USDT')[0]
+    const row = pairCell.closest('tr')
+
+    if (!row) {
+      throw new Error('Could not find BTC/USDT row')
+    }
+
+    fireEvent.click(row)
+
+    expect(await screen.findByText('Order ID')).toBeTruthy()
+    expect(screen.getByText('ORD-7A2F')).toBeTruthy()
+    expect(screen.getByText('Notes')).toBeTruthy()
+
+    fireEvent.click(row)
+
+    await waitFor(() => {
+      expect(screen.queryByText('ORD-7A2F')).toBeNull()
+    })
   })
 })

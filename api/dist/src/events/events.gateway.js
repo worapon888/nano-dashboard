@@ -12,10 +12,9 @@ var EventsGateway_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EventsGateway = void 0;
 const common_1 = require("@nestjs/common");
-const websockets_1 = require("@nestjs/websockets");
 const jwt_1 = require("@nestjs/jwt");
-const client_1 = require("@prisma/client");
-const ws_1 = require("ws");
+const websockets_1 = require("@nestjs/websockets");
+const socket_io_1 = require("socket.io");
 let EventsGateway = EventsGateway_1 = class EventsGateway {
     jwtService;
     constructor(jwtService) {
@@ -24,109 +23,55 @@ let EventsGateway = EventsGateway_1 = class EventsGateway {
     server;
     logger = new common_1.Logger(EventsGateway_1.name);
     connectionCount = 0;
-    connectedClients = new Set();
+    connectedClients = new Map();
     authenticatedClients = new Map();
-    clientsByRoom = new Map();
-    afterInit(_server) {
-        this.logger.log('WebSocket gateway initialized on path /ws');
+    afterInit() {
+        this.logger.log('Socket.io gateway initialized on path /ws');
     }
-    async handleConnection(client, request) {
+    async handleConnection(client) {
         try {
-            const currentUser = await this.authenticateClient(request);
-            this.connectedClients.add(client);
+            const currentUser = await this.authenticateClient(client);
+            this.connectedClients.set(client.id, client);
             if (currentUser) {
-                this.authenticatedClients.set(client, currentUser);
-                this.addClientToRoom(this.getUserRoom(currentUser.sub), client);
+                this.authenticatedClients.set(client.id, currentUser);
+                client.join(this.getUserRoom(currentUser.sub));
             }
             this.connectionCount++;
-            this.logger.log(`WS client connected (${currentUser ? `authenticated:${currentUser.sub}` : 'public'}). Active: ${this.connectionCount}`);
+            this.logger.log(`Socket client connected (${currentUser ? `authenticated:${currentUser.sub}` : 'public'}). Active: ${this.connectionCount}`);
         }
         catch (error) {
             const reason = error instanceof Error ? error.message : 'Unauthorized websocket client';
-            this.logger.warn(`WS client rejected: ${reason}`);
-            this.closeUnauthorizedClient(client, reason);
+            this.logger.warn(`Socket client rejected: ${reason}`);
+            client.emit('ws.error', {
+                code: 'UNAUTHORIZED',
+                message: reason,
+            });
+            client.disconnect(true);
         }
     }
     handleDisconnect(client) {
-        const wasConnected = this.connectedClients.delete(client);
-        const currentUser = this.authenticatedClients.get(client);
-        this.authenticatedClients.delete(client);
-        if (currentUser) {
-            this.removeClientFromRoom(this.getUserRoom(currentUser.sub), client);
-        }
+        const wasConnected = this.connectedClients.delete(client.id);
+        this.authenticatedClients.delete(client.id);
         if (!wasConnected) {
             return;
         }
         this.connectionCount = Math.max(0, this.connectionCount - 1);
-        this.logger.log(`WS client disconnected. Active: ${this.connectionCount}`);
+        this.logger.log(`Socket client disconnected. Active: ${this.connectionCount}`);
     }
     getConnectionCount() {
         return this.connectionCount;
     }
     publishUserCreated(user) {
-        this.broadcastToAdmins('user.created', user);
+        this.server.emit('user.created', user);
     }
     publishUserUpdated(user) {
-        const userId = typeof user.id === 'string' ? user.id : null;
-        this.broadcastToAdmins('user.updated', user);
-        if (userId) {
-            this.broadcastToRoom(this.getUserRoom(userId), 'user.updated', user);
-        }
+        this.server.emit('user.updated', user);
     }
     publishTicker(event, ticker) {
-        this.broadcast(event, ticker, 'all');
+        this.server.emit(event, ticker);
     }
-    broadcast(event, data, audience) {
-        const targets = audience === 'authenticated'
-            ? Array.from(this.authenticatedClients.keys())
-            : Array.from(this.connectedClients);
-        if (targets.length === 0) {
-            return;
-        }
-        const message = JSON.stringify({ event, data });
-        let sent = 0;
-        targets.forEach((client) => {
-            if (client.readyState === ws_1.WebSocket.OPEN) {
-                client.send(message);
-                sent++;
-            }
-        });
-        if (sent > 0) {
-            this.logger.debug(`Broadcast '${event}' → ${sent} client(s)`);
-        }
-    }
-    broadcastToAdmins(event, data) {
-        this.broadcastToClients(Array.from(this.authenticatedClients.entries())
-            .filter(([, currentUser]) => currentUser.role === client_1.UserRole.ADMIN)
-            .map(([client]) => client), event, data);
-    }
-    broadcastToRoom(room, event, data) {
-        const targets = Array.from(this.clientsByRoom.get(room) ?? []);
-        this.broadcastToClients(targets, event, data);
-    }
-    broadcastToClients(clients, event, data) {
-        if (clients.length === 0) {
-            return;
-        }
-        const message = JSON.stringify({ event, data });
-        const deliveredClients = new Set();
-        let sent = 0;
-        clients.forEach((client) => {
-            if (deliveredClients.has(client)) {
-                return;
-            }
-            deliveredClients.add(client);
-            if (client.readyState === ws_1.WebSocket.OPEN) {
-                client.send(message);
-                sent++;
-            }
-        });
-        if (sent > 0) {
-            this.logger.debug(`Broadcast '${event}' → ${sent} scoped client(s)`);
-        }
-    }
-    async authenticateClient(request) {
-        const token = this.extractToken(request);
+    async authenticateClient(client) {
+        const token = this.extractToken(client);
         if (!token) {
             return null;
         }
@@ -145,43 +90,20 @@ let EventsGateway = EventsGateway_1 = class EventsGateway {
             throw new common_1.UnauthorizedException('Invalid websocket credentials');
         }
     }
-    extractToken(request) {
-        const authorization = request.headers.authorization;
-        if (authorization?.startsWith('Bearer ')) {
+    extractToken(client) {
+        const authToken = client.handshake.auth?.token;
+        if (typeof authToken === 'string' && authToken.trim().length > 0) {
+            return authToken.trim();
+        }
+        const authorization = client.handshake.headers.authorization;
+        if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
             return authorization.replace('Bearer ', '').trim();
         }
-        const requestUrl = request.url ?? '/ws';
-        const parsedUrl = new URL(requestUrl, 'ws://localhost');
-        const queryToken = parsedUrl.searchParams.get('token') ??
-            parsedUrl.searchParams.get('accessToken');
-        return queryToken && queryToken.trim().length > 0 ? queryToken.trim() : null;
-    }
-    closeUnauthorizedClient(client, reason) {
-        if (client.readyState === ws_1.WebSocket.OPEN) {
-            client.send(JSON.stringify({
-                event: 'ws.error',
-                data: {
-                    code: 'UNAUTHORIZED',
-                    message: reason,
-                },
-            }));
+        const queryToken = client.handshake.query.token ?? client.handshake.query.accessToken;
+        if (typeof queryToken === 'string' && queryToken.trim().length > 0) {
+            return queryToken.trim();
         }
-        client.close(4401, reason);
-    }
-    addClientToRoom(room, client) {
-        const clients = this.clientsByRoom.get(room) ?? new Set();
-        clients.add(client);
-        this.clientsByRoom.set(room, clients);
-    }
-    removeClientFromRoom(room, client) {
-        const clients = this.clientsByRoom.get(room);
-        if (!clients) {
-            return;
-        }
-        clients.delete(client);
-        if (clients.size === 0) {
-            this.clientsByRoom.delete(room);
-        }
+        return null;
     }
     getUserRoom(userId) {
         return `user:${userId}`;
@@ -190,10 +112,16 @@ let EventsGateway = EventsGateway_1 = class EventsGateway {
 exports.EventsGateway = EventsGateway;
 __decorate([
     (0, websockets_1.WebSocketServer)(),
-    __metadata("design:type", ws_1.Server)
+    __metadata("design:type", socket_io_1.Server)
 ], EventsGateway.prototype, "server", void 0);
 exports.EventsGateway = EventsGateway = EventsGateway_1 = __decorate([
-    (0, websockets_1.WebSocketGateway)({ path: '/ws' }),
+    (0, websockets_1.WebSocketGateway)({
+        path: '/ws',
+        cors: {
+            origin: true,
+            credentials: true,
+        },
+    }),
     __metadata("design:paramtypes", [jwt_1.JwtService])
 ], EventsGateway);
 //# sourceMappingURL=events.gateway.js.map

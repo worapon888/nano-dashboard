@@ -23,6 +23,7 @@ const dashboardLenisOptions = {
 type DashboardPanelLayerProps = {
   panels: PanelRect[]
   canvasWidth: number
+  positionMode?: 'absolute' | 'static'
   isDragging: (panelId: string) => boolean
   isResizing: (panelId: string) => boolean
   isAnimating: (panelId: string) => boolean
@@ -43,6 +44,7 @@ type DashboardPanelLayerProps = {
 function DashboardPanelLayer({
   panels,
   canvasWidth,
+  positionMode = 'absolute',
   isDragging,
   isResizing,
   isAnimating,
@@ -74,6 +76,7 @@ function DashboardPanelLayer({
             panel={panel}
             widget={widget}
             canvasWidth={canvasWidth}
+            positionMode={positionMode}
             isDragging={isDragging(panel.id)}
             isResizing={isResizing(panel.id)}
             isAnimating={isAnimating(panel.id)}
@@ -114,6 +117,35 @@ function DashboardGrid({
   const isAnimating = (panelId: string) => controller.animatedPanelIds.includes(panelId)
   const canDrag = (panel: PanelRect) => controller.isDesktopViewport && panel.windowState === 'normal'
   const canResize = (panel: PanelRect) => controller.isDesktopViewport && panel.windowState === 'normal'
+
+  if (!controller.isDesktopViewport) {
+    return (
+      <div ref={canvasRef} className="w-full">
+        <div className="flex flex-col gap-4 sm:gap-5">
+          <DashboardPanelLayer
+            panels={controller.canvasPanels}
+            canvasWidth={controller.canvasWidth}
+            positionMode="static"
+            isDragging={isDragging}
+            isResizing={isResizing}
+            isAnimating={isAnimating}
+            canDrag={canDrag}
+            canResize={canResize}
+            getWidget={getWidget}
+            onDragStart={controller.handleDragStart}
+            onDrag={controller.handleDrag}
+            onDragEnd={controller.handleDragEnd}
+            onResizeStart={controller.handleResizeStart}
+            onResize={controller.handleResize}
+            onResizeEnd={controller.handleResizeEnd}
+            onResetToDefault={controller.handleResetToDefault}
+            onMinimizeToggle={controller.handleMinimizeToggle}
+            onMaximizeToggle={controller.handleMaximizeToggle}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div ref={canvasRef} className="relative h-full min-h-0 w-full overflow-hidden">

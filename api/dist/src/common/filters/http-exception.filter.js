@@ -12,7 +12,6 @@ let HttpExceptionFilter = class HttpExceptionFilter {
     catch(exception, host) {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
-        const request = ctx.getRequest();
         const statusCode = exception instanceof common_1.HttpException
             ? exception.getStatus()
             : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
@@ -22,12 +21,18 @@ let HttpExceptionFilter = class HttpExceptionFilter {
             'message' in exceptionResponse
             ? exceptionResponse.message
             : 'Internal server error';
+        const error = typeof exceptionResponse === 'object' &&
+            exceptionResponse !== null &&
+            'error' in exceptionResponse &&
+            typeof exceptionResponse.error === 'string'
+            ? exceptionResponse.error
+            : exception instanceof common_1.HttpException
+                ? exception.name
+                : 'InternalServerError';
         response.status(statusCode).send({
-            success: false,
             statusCode,
             message,
-            timestamp: new Date().toISOString(),
-            path: request.url,
+            error,
         });
     }
 };

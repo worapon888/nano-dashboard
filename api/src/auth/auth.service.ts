@@ -1,40 +1,41 @@
 import {
   ConflictException,
-  Inject,
   Injectable,
-  Logger,
   NotFoundException,
-  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { forwardRef, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { USER_EVENTS_PUBLISHER } from '../events/events.tokens';
-import type { UserEventsPublisher } from '../events/events.tokens';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
+import { JwtPayload } from 'jsonwebtoken';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
 const ACCESS_TOKEN_EXPIRES_IN = '15m';
-const PASSWORD_SALT_ROUNDS = 12;
+const REFRESH_TOKEN_EXPIRES_IN = '7d';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    @Optional()
-    @Inject(USER_EVENTS_PUBLISHER)
-    private readonly userEventsPublisher?: UserEventsPublisher,
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
   ) {}
 
   async register(registerDto: RegisterDto) {
     const email = this.normalizeEmail(registerDto.email);
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
+    const displayName = this.normalizeDisplayName(registerDto);
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        email,
+        deletedAt: null,
+      },
       select: { id: true },
     });
 
@@ -42,22 +43,15 @@ export class AuthService {
       throw new ConflictException('Email already exists');
     }
 
-    const passwordHash = await bcrypt.hash(
-      registerDto.password,
-      PASSWORD_SALT_ROUNDS,
-    );
-
-    let user: User;
+    await this.usersService.releaseSoftDeletedEmail(email);
 
     try {
-      user = await this.prisma.user.create({
-        data: {
-          email,
-          passwordHash,
-          displayName: registerDto.displayName.trim(),
-          role: UserRole.USER,
-          isActive: true,
-        },
+      return await this.usersService.createUser({
+        email,
+        password: registerDto.password,
+        displayName,
+        role: UserRole.USER,
+        isActive: true,
       });
     } catch (error) {
       if (this.isUniqueEmailConstraintError(error)) {
@@ -66,23 +60,6 @@ export class AuthService {
 
       throw error;
     }
-
-    const safeUser = this.toSafeUser(user);
-
-    // Fire-and-forget: a broadcast failure must never break registration.
-    try {
-      await this.userEventsPublisher?.publishUserCreated(
-        safeUser as unknown as Record<string, unknown>,
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Non-blocking event delivery failed for user.created (userId=${safeUser.id}, email=${safeUser.email}): ${
-          error instanceof Error ? error.message : 'unknown error'
-        }`,
-      );
-    }
-
-    return safeUser;
   }
 
   async login(loginDto: LoginDto) {
@@ -104,21 +81,33 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    return this.issueTokensForUser(user);
+  }
 
-    const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+  async refresh(refreshToken: string) {
+    let decoded: JwtPayload | string;
+
+    try {
+      decoded = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.getRefreshTokenSecret(),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (typeof decoded === 'string' || typeof decoded.sub !== 'string') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: decoded.sub },
     });
 
-    return {
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
-    };
+    if (!user || user.deletedAt || !user.isActive) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    return this.issueTokensForUser(user);
   }
 
   async me(userId: string) {
@@ -139,6 +128,44 @@ export class AuthService {
 
   private normalizeEmail(email: string) {
     return email.trim().toLowerCase();
+  }
+
+  private normalizeDisplayName(registerDto: RegisterDto) {
+    const value = registerDto.name ?? registerDto.displayName;
+    return value.trim();
+  }
+
+  private getRefreshTokenSecret() {
+    return (
+      this.configService.get<string>('JWT_REFRESH_SECRET') ??
+      this.configService.getOrThrow<string>('JWT_SECRET')
+    );
+  }
+
+  private async issueTokensForUser(user: User) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: this.getRefreshTokenSecret(),
+        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+      }),
+    ]);
+
+    return {
+      accessToken,
+      refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+      refreshExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+    };
   }
 
   private isUniqueEmailConstraintError(error: unknown): boolean {

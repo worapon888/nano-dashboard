@@ -9,6 +9,12 @@ import {
   register,
   type AuthenticatedUser,
 } from '../services/auth.service'
+import {
+  listUsers,
+  softDeleteUser,
+  updateUserDisplayName,
+  type ManagedUser,
+} from '../services/users.service'
 import type {
   BtcLivePriceUpdate,
   BtcLiveVolumeUpdate,
@@ -285,6 +291,11 @@ function DashboardPage() {
   const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null)
   const [btcTrendRange, setBtcTrendRange] = useState<BtcTrendRange>('1h')
   const [dailyPnlRange, setDailyPnlRange] = useState<DailyPnlRange>('week')
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState<string | null>(null)
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
 
   // Auth panel states (separate from dashboard loading)
   const [authLoading, setAuthLoading] = useState(false)
@@ -369,6 +380,33 @@ function DashboardPage() {
     }
   }
 
+  async function loadManagedUsers() {
+    const token = window.localStorage.getItem('accessToken')
+
+    if (!token) {
+      setManagedUsers([])
+      return
+    }
+
+    setUsersLoading(true)
+    setUsersError(null)
+
+    try {
+      const users = await listUsers(token)
+      setManagedUsers(users)
+    } catch (loadError) {
+      const status = getHttpStatus(loadError)
+
+      if (status === 401) {
+        return
+      }
+
+      setUsersError(loadError instanceof Error ? loadError.message : 'Unable to load users.')
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (realtimeNoticeTimerRef.current !== null) {
@@ -385,6 +423,7 @@ function DashboardPage() {
     if (isAuthenticated) {
       void loadCurrentUser()
       void loadDashboardSummary()
+      void loadManagedUsers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [btcTrendRange, dailyPnlRange, isAuthenticated])
@@ -569,6 +608,9 @@ function DashboardPage() {
     }
     setRealtimeNotice(null)
     setCurrentUser(null)
+    setManagedUsers([])
+    setUsersError(null)
+    setUsersLoading(false)
     setData(null)
     setError(null)
     setAuthError(null)
@@ -621,6 +663,11 @@ function DashboardPage() {
     <DashboardWorkspace
       currentUser={currentUser}
       data={data}
+      managedUsers={managedUsers}
+      usersLoading={usersLoading}
+      usersError={usersError}
+      updatingUserId={updatingUserId}
+      deletingUserId={deletingUserId}
       loading={loading}
       error={error}
       realtimeNotice={realtimeNotice}
@@ -631,6 +678,80 @@ function DashboardPage() {
       onDailyPnlRangeChange={handleDailyPnlRangeChange}
       onLogout={handleLogout}
       onRefresh={loadDashboardSummary}
+      onRefreshUsers={loadManagedUsers}
+      onUpdateDisplayName={async (userId, displayName) => {
+        const token = window.localStorage.getItem('accessToken')
+
+        if (!token) {
+          return
+        }
+
+        setUpdatingUserId(userId)
+        setUsersError(null)
+
+        try {
+          const updatedUser = await updateUserDisplayName(token, userId, displayName)
+          setManagedUsers((current) =>
+            current.map((user) => (user.id === updatedUser.id ? updatedUser : user)),
+          )
+          setCurrentUser((current) =>
+            current && current.id === updatedUser.id
+              ? { ...current, displayName: updatedUser.displayName }
+              : current,
+          )
+          showRealtimeNotice(`User updated: ${updatedUser.displayName}`)
+        } catch (updateError) {
+          const status = getHttpStatus(updateError)
+
+          if (status === 401) {
+            handleLogout()
+            setAuthError('Session expired. Please sign in again.')
+            return
+          }
+
+          setUsersError(
+            updateError instanceof Error ? updateError.message : 'Unable to update profile.',
+          )
+        } finally {
+          setUpdatingUserId(null)
+        }
+      }}
+      onDeleteUser={async (userId) => {
+        const token = window.localStorage.getItem('accessToken')
+
+        if (!token) {
+          return
+        }
+
+        setDeletingUserId(userId)
+        setUsersError(null)
+
+        try {
+          await softDeleteUser(token, userId)
+
+          if (currentUser?.id === userId) {
+            handleLogout()
+            return
+          }
+
+          setManagedUsers((current) => current.filter((user) => user.id !== userId))
+          void loadDashboardSummary()
+        } catch (deleteError) {
+          const status = getHttpStatus(deleteError)
+
+          if (status === 401) {
+            handleLogout()
+            setAuthError('Session expired. Please sign in again.')
+            return
+          }
+
+          setUsersError(
+            deleteError instanceof Error ? deleteError.message : 'Unable to delete user.',
+          )
+        } finally {
+          setDeletingUserId(null)
+        }
+      }}
     />
   )
 }

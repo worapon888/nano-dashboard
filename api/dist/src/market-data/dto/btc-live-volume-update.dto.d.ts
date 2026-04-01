@@ -1,4 +1,4 @@
-export type BtcLiveVolumeUpdateDto = {
+export declare class BtcLiveVolumeUpdateDto {
     symbol: 'BTCUSDT';
     timeframe: '15m' | '1h' | '4h' | '1d';
     label: string;
@@ -6,4 +6,4 @@ export type BtcLiveVolumeUpdateDto = {
     color: string;
     direction: 'bullish' | 'bearish';
     updatedAt: string;
-};
+}

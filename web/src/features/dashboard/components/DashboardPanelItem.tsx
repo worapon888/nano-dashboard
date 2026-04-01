@@ -10,6 +10,7 @@ type DashboardPanelItemProps = {
   panel: PanelRect
   widget: AnyWidgetConfig
   canvasWidth: number
+  positionMode?: 'absolute' | 'static'
   isDragging: boolean
   isResizing: boolean
   isAnimating: boolean
@@ -34,6 +35,7 @@ function DashboardPanelItem({
   panel,
   widget,
   canvasWidth,
+  positionMode = 'absolute',
   isDragging,
   isResizing,
   isAnimating,
@@ -75,22 +77,36 @@ function DashboardPanelItem({
 
   return (
     <div
-      className="pointer-events-auto absolute will-change-[left,top,width,height,transform,opacity]"
-      style={{
-        left: panel.x,
-        top: panel.y,
-        width: panel.width,
-        height: panel.height,
-        maxWidth: canvasWidth,
-        opacity: panel.windowState === 'minimized' ? 0.96 : 1,
-        transform: `scale(${panel.windowState === 'minimized' ? 0.985 : 1})`,
-        transition:
-          isDragging || isResizing
-            ? 'none'
-            : isAnimating
-              ? 'left 420ms cubic-bezier(0.22, 1, 0.36, 1), top 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), height 420ms cubic-bezier(0.22, 1, 0.36, 1), transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms cubic-bezier(0.22, 1, 0.36, 1)'
-              : 'none',
-      }}
+      className={[
+        'pointer-events-auto',
+        positionMode === 'absolute'
+          ? 'absolute will-change-[left,top,width,height,transform,opacity]'
+          : 'relative w-full',
+      ].join(' ')}
+      style={
+        positionMode === 'absolute'
+          ? {
+              left: panel.x,
+              top: panel.y,
+              width: panel.width,
+              height: panel.height,
+              maxWidth: canvasWidth,
+              opacity: panel.windowState === 'minimized' ? 0.96 : 1,
+              transform: `scale(${panel.windowState === 'minimized' ? 0.985 : 1})`,
+              transition:
+                isDragging || isResizing
+                  ? 'none'
+                  : isAnimating
+                    ? 'left 420ms cubic-bezier(0.22, 1, 0.36, 1), top 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), height 420ms cubic-bezier(0.22, 1, 0.36, 1), transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms cubic-bezier(0.22, 1, 0.36, 1)'
+                    : 'none',
+            }
+          : {
+              minHeight: panel.height,
+              height: panel.height,
+              maxWidth: canvasWidth,
+              opacity: panel.windowState === 'minimized' ? 0.96 : 1,
+            }
+      }
     >
       {isTableWidget(widget) ? (
         <TradingTable

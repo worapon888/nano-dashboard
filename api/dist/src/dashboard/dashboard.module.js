@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardModule = void 0;
 const common_1 = require("@nestjs/common");
+const binance_module_1 = require("../binance/binance.module");
 const internal_module_1 = require("../internal/internal.module");
 const market_data_module_1 = require("../market-data/market-data.module");
 const orders_module_1 = require("../orders/orders.module");
@@ -22,6 +23,7 @@ exports.DashboardModule = DashboardModule;
 exports.DashboardModule = DashboardModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            binance_module_1.BinanceModule,
             users_module_1.UsersModule,
             market_data_module_1.MarketDataModule,
             orders_module_1.OrdersModule,

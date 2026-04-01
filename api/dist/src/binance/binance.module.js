@@ -9,13 +9,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BinanceModule = void 0;
 const common_1 = require("@nestjs/common");
 const axios_1 = require("@nestjs/axios");
+const schedule_1 = require("@nestjs/schedule");
+const redis_module_1 = require("../redis/redis.module");
 const binance_service_1 = require("./binance.service");
 let BinanceModule = class BinanceModule {
 };
 exports.BinanceModule = BinanceModule;
 exports.BinanceModule = BinanceModule = __decorate([
     (0, common_1.Module)({
-        imports: [axios_1.HttpModule],
+        imports: [axios_1.HttpModule, redis_module_1.RedisModule, schedule_1.ScheduleModule.forRoot()],
         providers: [binance_service_1.BinanceService],
         exports: [binance_service_1.BinanceService],
     })

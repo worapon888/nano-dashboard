@@ -23,13 +23,13 @@ export declare class UsersController {
         message: string;
         data: import("./dto/user-response.dto").UserResponseDto;
     }>;
-    updateById(id: string, updateUserDto: UpdateUserDto): Promise<{
+    updateById(id: string, updateUserDto: UpdateUserDto, currentUser: CurrentUserPayload): Promise<{
         meta?: Record<string, any> | undefined;
         success: boolean;
         message: string;
         data: import("./dto/user-response.dto").UserResponseDto;
     }>;
-    softDeleteById(id: string): Promise<{
+    softDeleteById(id: string, currentUser: CurrentUserPayload): Promise<{
         meta?: Record<string, any> | undefined;
         success: boolean;
         message: string;

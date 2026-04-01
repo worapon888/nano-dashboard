@@ -16,6 +16,7 @@ import type {
   DashboardTopMover,
 } from '../../../types/dashboard'
 import type { AuthenticatedUser } from '../../../services/auth.service'
+import type { ManagedUser } from '../../../services/users.service'
 import DashboardGrid from './DashboardGrid'
 import ConfirmationDialog from '../../../shared/components/ConfirmationDialog'
 import { createTradingDashboardDefinition } from '../data/dashboardDefinition'
@@ -159,14 +160,293 @@ function UserMenuItem({
   )
 }
 
+type ProfileWorkspaceDialogProps = {
+  open: boolean
+  initialTab: ProfileWorkspaceTab
+  currentUser: AuthenticatedUser | null
+  users: ManagedUser[]
+  usersLoading: boolean
+  usersError: string | null
+  updatingUserId: string | null
+  deletingUserId: string | null
+  onClose: () => void
+  onRefreshUsers: () => void
+  onUpdateDisplayName: (userId: string, displayName: string) => void
+  onDeleteUser: (userId: string) => void
+}
+
+type ProfileWorkspaceTab = 'profile' | 'account' | 'notifications' | 'appearance'
+
+function ProfileWorkspaceDialog({
+  open,
+  initialTab,
+  currentUser,
+  users,
+  usersLoading,
+  usersError,
+  updatingUserId,
+  deletingUserId,
+  onClose,
+  onRefreshUsers,
+  onUpdateDisplayName,
+  onDeleteUser,
+}: ProfileWorkspaceDialogProps) {
+  const [activeTab, setActiveTab] = useState<ProfileWorkspaceTab>(initialTab)
+  const [displayNameDraft, setDisplayNameDraft] = useState('')
+  const isAdmin = currentUser?.role === 'ADMIN'
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    setActiveTab(initialTab)
+    setDisplayNameDraft(currentUser?.displayName ?? '')
+  }, [currentUser?.displayName, initialTab, open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [onClose, open])
+
+  if (!open) {
+    return null
+  }
+
+  const visibleUsers = isAdmin
+    ? users
+    : users.filter((user) => user.id === currentUser?.id)
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(3,5,8,0.72)] px-4 backdrop-blur-[3px]">
+      <div className="w-full max-w-3xl rounded-[1.6rem] border border-white/10 bg-[#0a0c10] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6">
+        <div className="flex flex-col gap-4 border-b border-white/8 pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[0.64rem] font-medium uppercase tracking-[0.24em] text-slate-500">
+              Profile Workspace
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Account controls</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Surface the user-management backend directly from the profile dropdown.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[0.68rem] font-medium uppercase tracking-[0.18em] text-slate-200 transition-colors hover:border-white/16 hover:bg-white/[0.05]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {([
+            ['profile', 'Profile'],
+            ['account', 'Account Settings'],
+            ['notifications', 'Notifications'],
+            ['appearance', 'Appearance'],
+          ] as Array<[ProfileWorkspaceTab, string]>).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => { setActiveTab(tab) }}
+              className={[
+                'rounded-full border px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.18em] transition-colors',
+                activeTab === tab
+                  ? 'border-white/16 bg-white/[0.08] text-white'
+                  : 'border-white/8 bg-white/[0.03] text-slate-400 hover:border-white/14 hover:text-slate-200',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {usersError ? (
+          <div className="mt-4 rounded-xl border border-rose-400/18 bg-rose-400/[0.05] px-4 py-3 text-sm text-rose-200">
+            {usersError}
+          </div>
+        ) : null}
+
+        {activeTab === 'profile' ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+              <p className="text-[0.66rem] uppercase tracking-[0.2em] text-slate-500">Current profile</p>
+              <p className="mt-3 text-lg font-semibold text-white">{currentUser?.displayName ?? 'User'}</p>
+              <p className="mt-1 text-sm text-slate-400">{currentUser?.email ?? 'unknown@example.com'}</p>
+              <p className="mt-2 text-[0.68rem] uppercase tracking-[0.18em] text-slate-500">
+                {currentUser?.role === 'ADMIN' ? 'Admin' : 'User'}
+              </p>
+            </div>
+
+            <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+              <p className="text-[0.66rem] uppercase tracking-[0.2em] text-slate-500">Update display name</p>
+              <input
+                type="text"
+                value={displayNameDraft}
+                onChange={(event) => { setDisplayNameDraft(event.target.value) }}
+                className="mt-3 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition focus:border-white/18 focus:bg-white/[0.06]"
+                placeholder="Your display name"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!currentUser || displayNameDraft.trim().length === 0 || updatingUserId === currentUser?.id}
+                  onClick={() => {
+                    if (!currentUser) {
+                      return
+                    }
+
+                    onUpdateDisplayName(currentUser.id, displayNameDraft.trim())
+                  }}
+                  className="rounded-full border border-emerald-400/18 bg-emerald-400/[0.08] px-3.5 py-2 text-[0.68rem] font-medium uppercase tracking-[0.18em] text-emerald-100 transition-colors hover:border-emerald-300/28 hover:bg-emerald-400/[0.12] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {updatingUserId === currentUser?.id ? 'Saving...' : 'Save Profile'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onRefreshUsers}
+                  disabled={usersLoading}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[0.68rem] font-medium uppercase tracking-[0.18em] text-slate-200 transition-colors hover:border-white/16 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {usersLoading ? 'Refreshing...' : 'Refresh Users'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'account' ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+            <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+              <p className="text-[0.66rem] uppercase tracking-[0.2em] text-slate-500">Danger zone</p>
+              <p className="mt-3 text-sm text-slate-400">
+                Soft delete will disable the account and mark it as deleted in the backend.
+              </p>
+              <button
+                type="button"
+                disabled={!currentUser || deletingUserId === currentUser?.id}
+                onClick={() => {
+                  if (!currentUser) {
+                    return
+                  }
+
+                  onDeleteUser(currentUser.id)
+                }}
+                className="mt-4 rounded-full border border-rose-400/18 bg-rose-400/[0.08] px-4 py-2.5 text-[0.68rem] font-medium uppercase tracking-[0.2em] text-rose-100 transition-colors hover:border-rose-300/28 hover:bg-rose-400/[0.12] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingUserId === currentUser?.id ? 'Deleting...' : 'Soft Delete My Account'}
+              </button>
+            </div>
+
+            <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[0.66rem] uppercase tracking-[0.2em] text-slate-500">
+                    {isAdmin ? 'User directory' : 'Account preview'}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {isAdmin
+                      ? 'Admin users can inspect recently created accounts here.'
+                      : 'Your own backend record is shown here.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onRefreshUsers}
+                  disabled={usersLoading}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[0.64rem] font-medium uppercase tracking-[0.18em] text-slate-200 transition-colors hover:border-white/16 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <div className="dashboard-themed-scroll mt-4 max-h-72 overflow-y-auto pr-1">
+                <ul className="space-y-3">
+                  {visibleUsers.length === 0 ? (
+                    <li className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-3 text-sm text-slate-400">
+                      No user records loaded yet.
+                    </li>
+                  ) : (
+                    visibleUsers.map((user) => (
+                      <li
+                        key={user.id}
+                        className="rounded-xl border border-white/8 bg-[#0b0f14] px-3 py-3"
+                      >
+                        <p className="text-sm font-medium text-white">{user.displayName}</p>
+                        <p className="mt-1 text-xs text-slate-400">{user.email}</p>
+                        <p className="mt-2 text-[0.64rem] uppercase tracking-[0.18em] text-slate-500">
+                          {user.role} • {user.isActive ? 'Active' : 'Inactive'}
+                        </p>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'notifications' ? (
+          <div className="mt-5 rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+            <p className="text-sm text-slate-300">Realtime user events already surface in the dashboard header.</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Create/update user events from the backend WebSocket flow appear as temporary notices without leaving the dashboard.
+            </p>
+          </div>
+        ) : null}
+
+        {activeTab === 'appearance' ? (
+          <div className="mt-5 rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+            <p className="text-sm text-slate-300">Appearance settings are UI-only for now.</p>
+            <p className="mt-2 text-sm text-slate-400">
+              This tab is useful in demos to show that the profile workspace can host non-destructive account preferences too.
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function UserMenu({
   currentUser,
+  users,
+  usersLoading,
+  usersError,
+  updatingUserId,
+  deletingUserId,
   onLogout,
+  onRefreshUsers,
+  onUpdateDisplayName,
+  onDeleteUser,
 }: {
   currentUser: AuthenticatedUser | null
+  users: ManagedUser[]
+  usersLoading: boolean
+  usersError: string | null
+  updatingUserId: string | null
+  deletingUserId: string | null
   onLogout: () => void
+  onRefreshUsers: () => void
+  onUpdateDisplayName: (userId: string, displayName: string) => void
+  onDeleteUser: (userId: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogTab, setDialogTab] = useState<ProfileWorkspaceTab>('profile')
   const menuRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuId = useId()
@@ -209,6 +489,12 @@ function UserMenu({
   function handleLogout() {
     setOpen(false)
     onLogout()
+  }
+
+  function openDialog(tab: ProfileWorkspaceTab) {
+    setDialogTab(tab)
+    setDialogOpen(true)
+    setOpen(false)
   }
 
   const displayName = currentUser?.displayName?.trim() || 'Authenticated User'
@@ -265,24 +551,44 @@ function UserMenu({
         <div className="my-2 h-px bg-white/8" />
 
         <div className="space-y-1">
-          <UserMenuItem label="Profile" />
-          <UserMenuItem label="Account Settings" />
-          <UserMenuItem label="Notifications" />
+          <UserMenuItem label="Profile" onClick={() => { openDialog('profile') }} />
+          <UserMenuItem label="Account Settings" onClick={() => { openDialog('account') }} />
+          <UserMenuItem label="Notifications" onClick={() => { openDialog('notifications') }} />
         </div>
 
         <div className="my-2 h-px bg-white/8" />
 
         <div className="space-y-1">
-          <UserMenuItem label="Appearance" />
+          <UserMenuItem label="Appearance" onClick={() => { openDialog('appearance') }} />
           <UserMenuItem label="Logout" destructive onClick={handleLogout} />
         </div>
       </div>
+
+      <ProfileWorkspaceDialog
+        open={dialogOpen}
+        initialTab={dialogTab}
+        currentUser={currentUser}
+        users={users}
+        usersLoading={usersLoading}
+        usersError={usersError}
+        updatingUserId={updatingUserId}
+        deletingUserId={deletingUserId}
+        onClose={() => { setDialogOpen(false) }}
+        onRefreshUsers={onRefreshUsers}
+        onUpdateDisplayName={onUpdateDisplayName}
+        onDeleteUser={onDeleteUser}
+      />
     </div>
   )
 }
 
 type HeaderProps = {
   currentUser: AuthenticatedUser | null
+  users: ManagedUser[]
+  usersLoading: boolean
+  usersError: string | null
+  updatingUserId: string | null
+  deletingUserId: string | null
   isLayoutEditing: boolean
   loading: boolean
   error: string | null
@@ -291,6 +597,9 @@ type HeaderProps = {
   realtimeNotice: string | null
   onLogout: () => void
   onRefresh: () => void
+  onRefreshUsers: () => void
+  onUpdateDisplayName: (userId: string, displayName: string) => void
+  onDeleteUser: (userId: string) => void
   onToggleLayoutEditing: () => void
   onResetLayout: () => void
   onAutoArrange: () => void
@@ -298,6 +607,11 @@ type HeaderProps = {
 
 function Header({
   currentUser,
+  users,
+  usersLoading,
+  usersError,
+  updatingUserId,
+  deletingUserId,
   isLayoutEditing,
   loading,
   error,
@@ -306,6 +620,9 @@ function Header({
   realtimeNotice,
   onLogout,
   onRefresh,
+  onRefreshUsers,
+  onUpdateDisplayName,
+  onDeleteUser,
   onToggleLayoutEditing,
   onResetLayout,
   onAutoArrange,
@@ -382,7 +699,18 @@ function Header({
             variant="primary"
             onClick={onToggleLayoutEditing}
           />
-          <UserMenu currentUser={currentUser} onLogout={onLogout} />
+          <UserMenu
+            currentUser={currentUser}
+            users={users}
+            usersLoading={usersLoading}
+            usersError={usersError}
+            updatingUserId={updatingUserId}
+            deletingUserId={deletingUserId}
+            onLogout={onLogout}
+            onRefreshUsers={onRefreshUsers}
+            onUpdateDisplayName={onUpdateDisplayName}
+            onDeleteUser={onDeleteUser}
+          />
         </div>
       </div>
     </header>
@@ -776,6 +1104,11 @@ function DashboardSummarySection({
 type DashboardWorkspaceProps = {
   currentUser: AuthenticatedUser | null
   data: DashboardSummaryData | null
+  managedUsers?: ManagedUser[]
+  usersLoading?: boolean
+  usersError?: string | null
+  updatingUserId?: string | null
+  deletingUserId?: string | null
   loading: boolean
   error: string | null
   realtimeNotice: string | null
@@ -786,11 +1119,19 @@ type DashboardWorkspaceProps = {
   onDailyPnlRangeChange: (range: DailyPnlRange) => void
   onLogout: () => void
   onRefresh: () => void
+  onRefreshUsers?: () => void
+  onUpdateDisplayName?: (userId: string, displayName: string) => void
+  onDeleteUser?: (userId: string) => void
 }
 
 function DashboardWorkspace({
   currentUser,
   data,
+  managedUsers = [],
+  usersLoading = false,
+  usersError = null,
+  updatingUserId = null,
+  deletingUserId = null,
   loading,
   error,
   realtimeNotice,
@@ -801,6 +1142,9 @@ function DashboardWorkspace({
   onDailyPnlRangeChange,
   onLogout,
   onRefresh,
+  onRefreshUsers = () => undefined,
+  onUpdateDisplayName = () => undefined,
+  onDeleteUser = () => undefined,
 }: DashboardWorkspaceProps) {
   const summary = data ?? null
   const userCount = summary?.userCount ?? null
@@ -901,6 +1245,11 @@ function DashboardWorkspace({
       <div className="relative z-10 flex min-h-screen min-h-0 w-full flex-col px-3 py-4 sm:px-5 sm:py-6 md:px-6 lg:px-10 lg:py-8">
         <Header
           currentUser={currentUser}
+          users={managedUsers}
+          usersLoading={usersLoading}
+          usersError={usersError}
+          updatingUserId={updatingUserId}
+          deletingUserId={deletingUserId}
           isLayoutEditing={isLayoutEditing}
           loading={loading}
           error={error}
@@ -909,6 +1258,9 @@ function DashboardWorkspace({
           realtimeNotice={realtimeNotice}
           onLogout={onLogout}
           onRefresh={onRefresh}
+          onRefreshUsers={onRefreshUsers}
+          onUpdateDisplayName={onUpdateDisplayName}
+          onDeleteUser={onDeleteUser}
           onToggleLayoutEditing={handleToggleLayoutEditing}
           onResetLayout={handleResetLayout}
           onAutoArrange={handleAutoArrange}

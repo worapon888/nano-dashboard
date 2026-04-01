@@ -23,6 +23,25 @@ describe('getDateRange', () => {
     })
   })
 
+  it('handles month ranges ending on 28, 29, 30, and 31 days', () => {
+    expect(getDateRange('2025-02-14', 'month')).toEqual({
+      start: '2025-02-01',
+      end: '2025-02-28',
+    })
+    expect(getDateRange('2024-02-14', 'month')).toEqual({
+      start: '2024-02-01',
+      end: '2024-02-29',
+    })
+    expect(getDateRange('2026-04-14', 'month')).toEqual({
+      start: '2026-04-01',
+      end: '2026-04-30',
+    })
+    expect(getDateRange('2026-03-14', 'month')).toEqual({
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+  })
+
   it('handles year boundaries correctly', () => {
     expect(getDateRange('2025-12-31', 'year')).toEqual({
       start: '2025-01-01',
@@ -48,6 +67,32 @@ describe('getDateRange', () => {
     expect(getDateRange('2025-02-30', 'day')).toEqual({
       start: '',
       end: '',
+    })
+  })
+
+  it('handles weeks that cross from December into January', () => {
+    expect(getDateRange('2025-12-31', 'week')).toEqual({
+      start: '2025-12-29',
+      end: '2026-01-04',
+    })
+  })
+
+  it('handles leap year dates for day, week, month, and year ranges', () => {
+    expect(getDateRange('2024-02-29', 'day')).toEqual({
+      start: '2024-02-29',
+      end: '2024-02-29',
+    })
+    expect(getDateRange('2024-02-29', 'week')).toEqual({
+      start: '2024-02-26',
+      end: '2024-03-03',
+    })
+    expect(getDateRange('2024-02-29', 'month')).toEqual({
+      start: '2024-02-01',
+      end: '2024-02-29',
+    })
+    expect(getDateRange('2024-02-29', 'year')).toEqual({
+      start: '2024-01-01',
+      end: '2024-12-31',
     })
   })
 })
