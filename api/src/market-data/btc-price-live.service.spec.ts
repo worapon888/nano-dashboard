@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { BinanceService } from '../binance/binance.service';
 import { BtcPriceLiveService } from './btc-price-live.service';
 
 type TestSocket = {
@@ -53,6 +54,7 @@ jest.mock('ws', () => {
 describe('BtcPriceLiveService', () => {
   let service: BtcPriceLiveService;
   let configService: ConfigService;
+  let binanceService: { getTicker: jest.Mock };
   let marketEventsPublisher: { publishTicker: jest.Mock };
 
   beforeEach(() => {
@@ -73,17 +75,31 @@ describe('BtcPriceLiveService', () => {
       }),
     } as unknown as ConfigService;
 
+    binanceService = {
+      getTicker: jest.fn().mockResolvedValue({
+        symbol: 'BTCUSDT',
+        price: '64000',
+        priceChange24h: '100',
+        priceChange24hPercent: '0.15',
+        high24h: '64500',
+        low24h: '63500',
+        fetchedAt: '2026-04-01T00:00:00.000Z',
+      }),
+    };
+
     marketEventsPublisher = {
       publishTicker: jest.fn(),
     };
 
     service = new BtcPriceLiveService(
       configService,
+      binanceService as unknown as BinanceService,
       marketEventsPublisher,
     );
   });
 
   afterEach(() => {
+    service.onModuleDestroy();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
@@ -109,5 +125,34 @@ describe('BtcPriceLiveService', () => {
 
     expect(mockWebSocketState.instances).toHaveLength(2);
     expect(service['socket']).toBe(secondSocket);
+  });
+
+  it('activates REST fallback polling when websocket handshake returns HTTP 451', async () => {
+    binanceService.getTicker.mockResolvedValue({
+      symbol: 'BTCUSDT',
+      price: '64000.5',
+      priceChange24h: '120.4',
+      priceChange24hPercent: '0.18',
+      high24h: '65000',
+      low24h: '63000',
+      fetchedAt: '2026-04-01T00:00:00.000Z',
+    });
+
+    service['connect']();
+
+    const firstSocket = mockWebSocketState.instances[0];
+    firstSocket.emit('error', new Error('Unexpected server response: 451'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service['isFallbackActive']).toBe(true);
+    expect(binanceService.getTicker).toHaveBeenCalledWith('BTCUSDT');
+    expect(marketEventsPublisher.publishTicker).toHaveBeenCalledWith(
+      'btc.price.updated',
+      expect.objectContaining({
+        symbol: 'BTCUSDT',
+        price: 64000.5,
+      }),
+    );
   });
 });

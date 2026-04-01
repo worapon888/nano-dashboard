@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import WebSocket, { RawData } from 'ws';
+import { BinanceService } from '../binance/binance.service';
 import { MARKET_EVENTS_PUBLISHER } from '../events/events.tokens';
 import type { MarketEventsPublisher } from '../events/events.tokens';
 import { BtcLiveVolumeUpdateDto } from './dto/btc-live-volume-update.dto';
@@ -42,18 +43,23 @@ const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 const BULLISH_COLOR = '#22c55e';
 const BEARISH_COLOR = '#ef4444';
+const FALLBACK_POLL_INTERVAL_MS = 30000;
 
 @Injectable()
 export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BtcVolumeLiveService.name);
   private socket: WebSocket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private fallbackPollTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt = 0;
   private isShuttingDown = false;
   private readonly lastEventSignatureByTimeframe = new Map<string, string>();
+  private isFallbackActive = false;
+  private isPollingFallback = false;
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly binanceService: BinanceService,
     @Optional()
     @Inject(MARKET_EVENTS_PUBLISHER)
     private readonly marketEventsPublisher?: MarketEventsPublisher,
@@ -75,6 +81,8 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+
+    this.stopFallbackPolling();
 
     if (this.socket) {
       this.socket.removeAllListeners();
@@ -101,7 +109,9 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
     }
 
     const streamUrl = this.getWsStreamUrl();
-    this.logger.log(`Connecting BTC live volume stream: ${streamUrl}`);
+    this.logger.log(
+      `Connecting BTC live volume stream (attempt ${this.reconnectAttempt + 1}): ${streamUrl}`,
+    );
 
     const socket = new WebSocket(streamUrl);
     this.socket = socket;
@@ -112,6 +122,7 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.reconnectAttempt = 0;
+      this.deactivateFallback('websocket_connected');
       this.logger.log('BTC live volume stream connected');
     });
 
@@ -129,6 +140,7 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
         `BTC live volume stream closed (code ${code}, reason ${reasonText})`,
       );
       this.socket = null;
+      this.activateFallback(`socket_close_${code}`);
 
       if (!this.isShuttingDown) {
         this.scheduleReconnect();
@@ -144,6 +156,7 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
         `BTC live volume stream error: ${error.message}`,
         error.stack,
       );
+      this.activateFallback(this.classifyFallbackReason(error));
     });
   }
 
@@ -154,6 +167,10 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    await this.publishUpdate(parsed);
+  }
+
+  private async publishUpdate(parsed: BtcLiveVolumeUpdateDto): Promise<void> {
     const signature = `${parsed.label}:${parsed.updatedAt}:${parsed.volume}:${parsed.direction}`;
     const lastSignature = this.lastEventSignatureByTimeframe.get(parsed.timeframe);
 
@@ -249,7 +266,7 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
     );
 
     this.logger.warn(
-      `Retrying BTC live volume stream connection in ${delayMs}ms (attempt ${this.reconnectAttempt})`,
+      `Retrying BTC live volume stream connection in ${delayMs}ms (retry ${this.reconnectAttempt}, url ${this.getResolvedStreamUrl()})`,
     );
 
     this.reconnectTimer = setTimeout(() => {
@@ -266,6 +283,117 @@ export class BtcVolumeLiveService implements OnModuleInit, OnModuleDestroy {
     const baseOrigin = normalizedBaseUrl.replace(/\/ws$/, '');
 
     return `${baseOrigin}/stream?streams=${BTC_KLINE_STREAMS.join('/')}`;
+  }
+
+  private getResolvedStreamUrl(): string {
+    return this.getWsStreamUrl();
+  }
+
+  private activateFallback(reason: string): void {
+    if (this.isShuttingDown || this.isFallbackActive) {
+      return;
+    }
+
+    this.isFallbackActive = true;
+    this.logger.warn(
+      `BTC live volume fallback activated (${reason}); polling REST klines while websocket retries continue`,
+    );
+    void this.pollFallbackOnce();
+  }
+
+  private deactivateFallback(reason: string): void {
+    if (!this.isFallbackActive) {
+      return;
+    }
+
+    this.logger.log(`BTC live volume fallback deactivated (${reason})`);
+    this.isFallbackActive = false;
+    this.stopFallbackPolling();
+  }
+
+  private stopFallbackPolling(): void {
+    if (this.fallbackPollTimer) {
+      clearTimeout(this.fallbackPollTimer);
+      this.fallbackPollTimer = null;
+    }
+
+    this.isPollingFallback = false;
+  }
+
+  private async pollFallbackOnce(): Promise<void> {
+    if (
+      this.isShuttingDown ||
+      !this.isFallbackActive ||
+      this.isPollingFallback
+    ) {
+      return;
+    }
+
+    this.isPollingFallback = true;
+
+    try {
+      const klinesByTimeframe = await Promise.all(
+        (
+          ['15m', '1h', '4h', '1d'] as BtcLiveVolumeUpdateDto['timeframe'][]
+        ).map(async (timeframe) => ({
+          timeframe,
+          klines: await this.binanceService.getKlines(BTC_SYMBOL, timeframe, 1),
+        })),
+      );
+
+      for (const { timeframe, klines } of klinesByTimeframe) {
+        const latestKline = klines[0];
+        if (!latestKline) {
+          continue;
+        }
+
+        const openTime = Number(latestKline[0]);
+        const open = this.toOptionalFiniteNumber(latestKline[1]);
+        const close = this.toOptionalFiniteNumber(latestKline[4]);
+        const volume = this.toOptionalFiniteNumber(latestKline[5]);
+
+        if (
+          !Number.isFinite(openTime) ||
+          open === null ||
+          close === null ||
+          volume === null
+        ) {
+          continue;
+        }
+
+        const direction = close >= open ? 'bullish' : 'bearish';
+
+        await this.publishUpdate({
+          symbol: BTC_SYMBOL,
+          timeframe,
+          label: this.formatVolumeLabel(openTime, timeframe),
+          volume,
+          color: direction === 'bullish' ? BULLISH_COLOR : BEARISH_COLOR,
+          direction,
+          updatedAt: new Date(Number(latestKline[6]) || Date.now()).toISOString(),
+        });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `BTC live volume fallback poll failed: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    } finally {
+      this.isPollingFallback = false;
+
+      if (!this.isShuttingDown && this.isFallbackActive) {
+        this.fallbackPollTimer = setTimeout(() => {
+          this.fallbackPollTimer = null;
+          void this.pollFallbackOnce();
+        }, FALLBACK_POLL_INTERVAL_MS);
+      }
+    }
+  }
+
+  private classifyFallbackReason(error: Error): string {
+    return /451/.test(error.message) ? 'upstream_http_451' : 'websocket_error';
   }
 
   private formatVolumeLabel(

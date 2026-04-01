@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { BinanceService } from '../binance/binance.service';
 import { BtcVolumeLiveService } from './btc-volume-live.service';
 
 type TestSocket = {
@@ -53,6 +54,7 @@ jest.mock('ws', () => {
 describe('BtcVolumeLiveService', () => {
   let service: BtcVolumeLiveService;
   let configService: ConfigService;
+  let binanceService: { getKlines: jest.Mock };
   let marketEventsPublisher: { publishTicker: jest.Mock };
 
   beforeEach(() => {
@@ -73,17 +75,38 @@ describe('BtcVolumeLiveService', () => {
       }),
     } as unknown as ConfigService;
 
+    binanceService = {
+      getKlines: jest.fn().mockResolvedValue([
+        [
+          1711929600000,
+          '63000',
+          '64500',
+          '62800',
+          '64000',
+          '1523.25',
+          1711930499999,
+          '0',
+          0,
+          '0',
+          '0',
+          '0',
+        ],
+      ]),
+    };
+
     marketEventsPublisher = {
       publishTicker: jest.fn(),
     };
 
     service = new BtcVolumeLiveService(
       configService,
+      binanceService as unknown as BinanceService,
       marketEventsPublisher,
     );
   });
 
   afterEach(() => {
+    service.onModuleDestroy();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
@@ -109,5 +132,37 @@ describe('BtcVolumeLiveService', () => {
 
     expect(mockWebSocketState.instances).toHaveLength(2);
     expect(service['socket']).toBe(secondSocket);
+  });
+
+  it('activates REST fallback polling when websocket handshake returns HTTP 451', async () => {
+    binanceService.getKlines.mockResolvedValue([
+      [
+        1711929600000,
+        '63000',
+        '64500',
+        '62800',
+        '64000',
+        '1523.25',
+        1711930499999,
+        '0',
+        0,
+        '0',
+        '0',
+        '0',
+      ],
+    ]);
+
+    service['connect']();
+
+    const firstSocket = mockWebSocketState.instances[0];
+    firstSocket.emit('error', new Error('Unexpected server response: 451'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service['isFallbackActive']).toBe(true);
+    expect(binanceService.getKlines).toHaveBeenCalledWith('BTCUSDT', '15m', 1);
+    expect(binanceService.getKlines).toHaveBeenCalledWith('BTCUSDT', '1h', 1);
+    expect(binanceService.getKlines).toHaveBeenCalledWith('BTCUSDT', '4h', 1);
+    expect(binanceService.getKlines).toHaveBeenCalledWith('BTCUSDT', '1d', 1);
   });
 });
