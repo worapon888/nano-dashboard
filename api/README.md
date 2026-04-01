@@ -415,8 +415,8 @@ The collection includes sample requests and example responses for:
 - This backend intentionally keeps controllers thin and routes external API access through services
 - Binance access is never called directly from controllers
 
-## 12. Placeholder Links
+## 12. Links
 
-- Deployment URL: `<REPLACE_WITH_BACKEND_URL>`
+- Deployment URL: `https://dynamic-embrace-production.up.railway.app`
 - Postman Collection: `api/postman/NanoDashboard.postman_collection.json`
-- Repository: `<REPLACE_WITH_REPOSITORY_URL>`
+- Repository: `https://github.com/worapon888/nano-dashboard`

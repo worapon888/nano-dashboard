@@ -1,8 +1,8 @@
 # NanoDashboard
 
-Trading-style fullstack dashboard built as a take-home assignment for a Mid-Senior Fullstack Developer role.
+NanoDashboard is a trading-style fullstack dashboard built as a take-home assignment for a Mid-Senior Fullstack Developer role. It combines a React frontend focused on interactive dashboard behavior with a NestJS backend that owns authentication, market-data integration, caching, realtime delivery, and dashboard aggregation.
 
-NanoDashboard combines a React frontend with a NestJS backend to deliver a small but reviewable product slice: an interactive dashboard workspace on the client, and a backend that owns auth, market-data integration, caching, realtime delivery, and dashboard aggregation. The intent was to show product thinking and architecture discipline, not just isolated demo screens or CRUD endpoints.
+The goal was not to ship a collection of isolated demo screens and endpoints, but a small product slice that is still reviewable from an architecture perspective. The frontend behaves like a workspace with draggable and resizable widgets, while the backend exposes a dashboard-specific contract instead of leaking external Binance payloads directly to the client.
 
 ## Live Demo
 
@@ -10,35 +10,71 @@ NanoDashboard combines a React frontend with a NestJS backend to deliver a small
 - Backend: `https://dynamic-embrace-production.up.railway.app`
 - Swagger UI: `https://dynamic-embrace-production.up.railway.app/api/docs`
 - OpenAPI JSON: `https://dynamic-embrace-production.up.railway.app/api/docs-json`
-- Thai overview: [README.th.md](./README.th.md)
-
-## Project Snapshot
-
-| Area | What is implemented |
-| --- | --- |
-| Frontend | Drag/resize dashboard widgets, chart composition, realtime updates, resizable table columns |
-| Backend | JWT auth, refresh token flow, users CRUD, dashboard aggregation, market-data normalization |
-| Realtime | User events plus BTC price/volume updates |
-| Reliability | Retry, timeout, hot/stale Redis cache, degraded-state fallback |
-| Reviewability | Swagger/OpenAPI, Postman collection, tests across backend/frontend/e2e |
-
-## Why This Project Is Structured This Way
-
-The frontend is intentionally UI-focused. It should not need to know Binance response shapes, retry behavior, cache key strategy, or upstream quirks. That complexity is absorbed by the backend and exposed as dashboard-specific contracts such as `GET /api/dashboard/summary`.
-
-The backend is implemented as a modular monolith. That gives clear service boundaries for review without paying the operational cost of microservices in a take-home assignment.
 
 ## Highlights
 
-- Interactive dashboard workspace with draggable and resizable widgets
-- Four chart types: line, bar, column, and pie
-- Widget composition layer so presentation does not depend on raw upstream payloads
-- JWT auth with register, login, refresh, and authenticated profile flows
-- Users CRUD with guarded routes and role-aware access
-- Binance REST and websocket integration with retry and reconnect handling
-- Redis-backed hot/stale cache strategy for aggregated dashboard data
-- Swagger/OpenAPI and Postman assets for API review
-- Backend, frontend, integration, and browser-level test coverage
+- Interactive dashboard workspace with drag, resize, reset, minimize/maximize, and widget composition
+- Multiple chart types via ApexCharts: line, bar, column, and pie
+- Realtime frontend updates for BTC price, BTC volume, and user events
+- NestJS backend with JWT auth, refresh token flow, user CRUD, and role-based protection
+- Binance REST and websocket integration with retry, reconnect, timeout, and fallback behavior
+- Redis-backed hot/stale cache strategy for aggregated dashboard responses
+- Swagger/OpenAPI docs and a Postman collection for API review
+- Automated coverage across backend, frontend, and browser-level flows
+
+## Architecture At A Glance
+
+This project uses a modular monolith. That keeps the codebase structured enough to demonstrate clear service boundaries without introducing the operational overhead of microservices for a take-home assignment.
+
+Main backend modules include:
+
+- `auth`
+- `users`
+- `dashboard`
+- `market-data`
+- `binance`
+- `events`
+- `orders`
+- `pnl`
+- `internal`
+
+The main frontend responsibility is rendering and interaction. The backend absorbs external API complexity, normalizes market data, applies cache/fallback behavior, and exposes dashboard-shaped responses to the UI.
+
+## Repo Structure
+
+```text
+nanodashboard/
+├─ api/                    # NestJS backend
+├─ web/                    # React frontend
+├─ architecture-diagrams/  # Supporting architecture assets
+├─ database design/        # Database design references
+├─ Runtime execution flows/# Runtime flow references
+├─ docker-compose.yml      # Local PostgreSQL + Redis
+├─ README.md
+└─ README.th.md
+```
+
+## Assignment Coverage
+
+### Frontend
+
+- Drag / resize / arrange widgets: done
+- Four chart types: done
+- Realtime UI updates: done
+- `getDateRange` utility: done
+- Resizable table columns: done
+- Expandable table rows: not implemented yet
+
+### Backend
+
+- Users CRUD + JWT auth: done
+- Refresh token flow: done
+- User websocket events: done
+- Binance REST + websocket integration: done
+- Redis cache: done
+- Aggregated dashboard endpoint: done
+- Internal service layer: done
+- Database schema design: done
 
 ## Tech Stack
 
@@ -67,42 +103,15 @@ The backend is implemented as a modular monolith. That gives clear service bound
 - Binance REST API
 - Binance websocket streams
 
-## Repo Structure
+### Testing
 
-```text
-nanodashboard/
-├─ api/                     # NestJS backend
-├─ web/                     # React frontend
-├─ architecture-diagrams/   # Supporting architecture assets
-├─ database design/         # Database design references
-├─ Runtime execution flows/ # Runtime flow references
-├─ docker-compose.yml       # Local PostgreSQL + Redis
-├─ README.md
-└─ README.th.md
-```
-
-## Core Features
-
-### Frontend
-
-- Custom dashboard layout behavior for drag, resize, collision handling, and reset
-- Chart widgets for BTC trend, market share, volume profile, and daily PNL
-- Resizable open-orders table built to fit widget constraints
-- Realtime UI updates for BTC price, BTC volume, and user events
-- `getDateRange` utility for normalized UTC date-range handling
-
-### Backend
-
-- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`
-- `GET /api/users`, `GET /api/users/me`, `GET /api/users/:id`, `PATCH /api/users/:id`, `DELETE /api/users/:id`
-- `GET /api/market/ticker/:symbol`
-- `GET /api/dashboard`
-- `GET /api/dashboard/summary`
-- Socket.IO realtime endpoints on `/users` and `/ws`
+- Jest
+- Vitest + Testing Library
+- Playwright
 
 ## Quick Start
 
-### 1. Start local infrastructure
+### 1. Start infrastructure
 
 ```bash
 docker-compose up -d
@@ -113,7 +122,7 @@ This starts:
 - PostgreSQL on `localhost:5432`
 - Redis on `localhost:6379`
 
-### 2. Run the backend
+### 2. Start the backend
 
 ```bash
 cd api
@@ -148,7 +157,7 @@ Backend URLs:
 - Swagger UI: `http://localhost:3000/api/docs`
 - OpenAPI JSON: `http://localhost:3000/api/docs-json`
 
-### 3. Run the frontend
+### 3. Start the frontend
 
 ```bash
 cd web
@@ -171,6 +180,38 @@ Frontend URL:
 
 - `http://localhost:5173`
 
+## Key API Surface
+
+### Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `GET /api/auth/me`
+
+### Users
+
+- `GET /api/users`
+- `GET /api/users/me`
+- `GET /api/users/:id`
+- `PATCH /api/users/:id`
+- `DELETE /api/users/:id`
+
+### Market Data
+
+- `GET /api/market/ticker/:symbol`
+
+### Dashboard
+
+- `GET /api/dashboard`
+- `GET /api/dashboard/summary`
+
+### Realtime
+
+- Socket.IO namespace: `/users`
+- Socket.IO namespace: `/ws`
+- Example events: `user.created`, `user.updated`, `btc.price.updated`, `btc.volume.updated`
+
 ## Testing
 
 ### Backend
@@ -191,23 +232,22 @@ npm run test:e2e
 
 ## Reliability Notes
 
-- Dashboard aggregation uses hot cache and stale cache to reduce repeated upstream calls
-- Binance REST requests retry only for retryable failure classes
-- Dashboard sections are wrapped with timeout and fallback behavior
-- Successful rebuilds repopulate both hot and stale cache layers
-- BTC live consumers reconnect with exponential backoff
-- Frontend socket handling also reconnects and cleans up listeners to avoid duplication
+- Dashboard aggregation uses hot cache and stale cache to reduce repeated upstream calls and preserve degraded usability
+- Binance REST requests use retry logic for retryable failure modes
+- Dashboard sections are protected by timeout and fallback behavior
+- Binance live consumers reconnect with exponential backoff
+- Frontend websocket handling also reconnects with cleanup to avoid duplicate listeners
 
 ## Trade-offs And Known Limitations
 
 - Open orders and daily PNL still include demo-oriented seeded data
 - Expandable table rows are not implemented yet
-- Observability is intentionally light; metrics, tracing, and alerting are not complete
-- CORS origins are still configured in code instead of fully externalized
-- The project is production-like in structure, but not presented as a production trading platform
+- Production observability is still limited; metrics, tracing, and alerting are not fully built out
+- CORS origins are still defined in code rather than fully externalized to environment config
+- The system is production-like in structure, but not presented as a complete production trading platform
 
-## Additional Documentation
+## Additional Docs
 
-- Backend docs: [api/README.md](./api/README.md)
+- Backend documentation: [api/README.md](./api/README.md)
 - Thai project overview: [README.th.md](./README.th.md)
-- Postman collection: [api/postman/NanoDashboard.postman_collection.json](./api/postman/NanoDashboard.postman_collection.json)
+- Postman collection: [NanoDashboard.postman_collection.json](./api/postman/NanoDashboard.postman_collection.json)
