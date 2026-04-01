@@ -16,6 +16,7 @@ async function bootstrap() {
     const allowedOrigins = new Set([
         'http://localhost:5173',
         'https://nano-dashboard-pi.vercel.app',
+        'http://192.168.1.104:5173',
     ]);
     app.enableCors({
         origin: (origin, callback) => {

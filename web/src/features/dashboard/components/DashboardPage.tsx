@@ -529,13 +529,20 @@ function UserMenu({
         <ChevronDownIcon open={open} />
       </button>
 
+      {open ? (
+        <div
+          className="fixed inset-0 z-10 bg-[rgba(3,5,8,0.42)] backdrop-blur-[2px] sm:hidden"
+          aria-hidden="true"
+        />
+      ) : null}
+
       <div
         id={menuId}
         ref={menuRef}
         role="menu"
         aria-label="User menu"
         className={[
-          'absolute right-0 z-20 mt-2 w-[280px] origin-top-right rounded-2xl border border-white/10 bg-[#0c0c0c] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.6)] transition duration-150 ease-out',
+          'fixed inset-x-4 top-24 z-20 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0c0c0c] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.6)] transition duration-150 ease-out sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-[280px] sm:origin-top-right sm:overflow-visible',
           open
             ? 'pointer-events-auto translate-y-0 opacity-100'
             : 'pointer-events-none -translate-y-1 opacity-0',
@@ -1036,7 +1043,7 @@ function TopMoversWidget({
   }
 
   return (
-    <div className="dashboard-themed-scroll h-full min-h-0 overflow-y-auto pr-1">
+    <div className="dashboard-themed-scroll dashboard-touch-scroll h-full min-h-0 overflow-y-auto pr-1">
       <ul className="space-y-3">
         {items.map((mover) => (
           <TopMoverRow key={`${mover.symbol}-${mover.fetchedAt}`} mover={mover} />
