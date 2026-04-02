@@ -252,7 +252,8 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
     async getTicker(symbol) {
         const normalizedSymbol = this.normalizeSymbol(symbol);
         const redisClient = this.redisService.getClient();
-        if (!redisClient) {
+        const redisReady = this.redisService.isReady();
+        if (!redisClient || !redisReady) {
             this.logger.warn(`Redis unavailable; fetching ticker directly for ${normalizedSymbol}`);
             const directTicker = await this.getTickerFromBinanceOrFallbackWithoutRedis(normalizedSymbol);
             return this.isStaleTicker(directTicker)
@@ -334,6 +335,9 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
     async getTickerFromBinanceOrFallback(symbol) {
         try {
             const ticker = await this.binanceService.getTicker(symbol);
+            if (this.isUnavailableTicker(ticker)) {
+                throw new binance_service_1.BinanceUnavailableException(`Fallback ticker payload returned for ${symbol}`);
+            }
             this.logger.log(`Ticker Binance fetch success for ${symbol}`);
             return this.stripRuntimeCacheFlags(ticker);
         }
@@ -347,6 +351,9 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
     async getTickerFromBinanceOrFallbackWithoutRedis(symbol) {
         try {
             const ticker = await this.binanceService.getTicker(symbol);
+            if (this.isUnavailableTicker(ticker)) {
+                throw new binance_service_1.BinanceUnavailableException(`Fallback ticker payload returned for ${symbol}`);
+            }
             this.logger.log(`Ticker direct Binance fetch success for ${symbol}`);
             return this.stripRuntimeCacheFlags(ticker);
         }
@@ -413,6 +420,14 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
     }
     isStaleTicker(ticker) {
         return ticker.cacheSource === 'stale' || ticker.stale === true;
+    }
+    isUnavailableTicker(ticker) {
+        if (ticker.stale === true || ticker.source === 'fallback') {
+            return true;
+        }
+        const price = this.toFiniteNumber(ticker.price);
+        const volume24h = this.toFiniteNumber(ticker.volume24h);
+        return price <= 0 || volume24h <= 0;
     }
     normalizeSymbol(symbol) {
         return symbol.trim().toUpperCase();

@@ -84,6 +84,7 @@ export declare class MarketDataService {
     private withCacheSource;
     private stripRuntimeCacheFlags;
     private isStaleTicker;
+    private isUnavailableTicker;
     private normalizeSymbol;
     private toBtcLivePriceUpdate;
     private getHotCacheKey;

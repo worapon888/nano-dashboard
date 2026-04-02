@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { io, type Socket } from 'socket.io-client'
 import type {
   BtcLivePriceUpdate,
   BtcLiveVolumeUpdate,
   RealtimeUserEvent,
 } from '../../../types/dashboard'
-
-type SocketEnvelope = {
-  event?: unknown
-  data?: unknown
-}
 
 type DashboardSocketStatus = 'connecting' | 'live' | 'offline'
 
@@ -29,17 +25,10 @@ const RECONNECT_MAX_DELAY_MS = 15000
 
 function getDashboardSocketUrl() {
   const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
-  const normalizedBaseUrl = configuredBaseUrl
+
+  return configuredBaseUrl
     .replace(/\/+$/, '')
     .replace(/\/api$/, '')
-  const accessToken = window.localStorage.getItem('accessToken')
-  const tokenQuery = accessToken ? `?token=${encodeURIComponent(accessToken)}` : ''
-
-  if (normalizedBaseUrl.startsWith('https://')) {
-    return `${normalizedBaseUrl.replace(/^https:\/\//, 'wss://')}/ws${tokenQuery}`
-  }
-
-  return `${normalizedBaseUrl.replace(/^http:\/\//, 'ws://')}/ws${tokenQuery}`
 }
 
 function parseBtcLivePriceUpdate(payload: unknown): BtcLivePriceUpdate | null {
@@ -188,9 +177,7 @@ export function useDashboardSocket({
   onUserUpdated,
 }: UseDashboardSocketParams): DashboardSocketStatus {
   const [status, setStatus] = useState<DashboardSocketStatus>('offline')
-  const socketRef = useRef<WebSocket | null>(null)
-  const reconnectTimerRef = useRef<number | null>(null)
-  const reconnectAttemptRef = useRef(0)
+  const socketRef = useRef<Socket | null>(null)
   const latestCallbackRef = useRef(onBtcPriceUpdated)
   const latestVolumeCallbackRef = useRef(onBtcVolumeUpdated)
   const latestUserCreatedCallbackRef = useRef(onUserCreated)
@@ -203,151 +190,94 @@ export function useDashboardSocket({
 
   useEffect(() => {
     if (!enabled) {
-      if (reconnectTimerRef.current !== null) {
-        window.clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
-      }
-
-      socketRef.current?.close()
+      socketRef.current?.disconnect()
       socketRef.current = null
-      reconnectAttemptRef.current = 0
       setStatus('offline')
       return
     }
 
-    let cancelled = false
+    const accessToken = window.localStorage.getItem('accessToken')
+    setStatus('connecting')
 
-    const clearReconnectTimer = () => {
-      if (reconnectTimerRef.current !== null) {
-        window.clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
-      }
-    }
+    const socket = io(getDashboardSocketUrl(), {
+      path: '/ws',
+      transports: ['websocket'],
+      auth: accessToken ? { token: accessToken } : undefined,
+      reconnection: true,
+      reconnectionDelay: RECONNECT_BASE_DELAY_MS,
+      reconnectionDelayMax: RECONNECT_MAX_DELAY_MS,
+    })
 
-    const cleanupSocket = () => {
-      if (socketRef.current) {
-        socketRef.current.onopen = null
-        socketRef.current.onmessage = null
-        socketRef.current.onerror = null
-        socketRef.current.onclose = null
-        socketRef.current.close()
-        socketRef.current = null
-      }
-    }
+    socketRef.current = socket
 
-    const scheduleReconnect = () => {
-      if (cancelled || reconnectTimerRef.current !== null) {
+    socket.on('connect', () => {
+      if (socketRef.current !== socket) {
         return
       }
 
-      reconnectAttemptRef.current += 1
-      const delayMs = Math.min(
-        RECONNECT_BASE_DELAY_MS * 2 ** (reconnectAttemptRef.current - 1),
-        RECONNECT_MAX_DELAY_MS,
-      )
+      setStatus('live')
+    })
 
-      reconnectTimerRef.current = window.setTimeout(() => {
-        reconnectTimerRef.current = null
-        connect()
-      }, delayMs)
-    }
-
-    const connect = () => {
-      if (cancelled || socketRef.current) {
+    socket.on('disconnect', () => {
+      if (socketRef.current !== socket) {
         return
       }
 
       setStatus('connecting')
+    })
 
-      const socket = new window.WebSocket(getDashboardSocketUrl())
-      socketRef.current = socket
-
-      socket.onopen = () => {
-        if (socketRef.current !== socket) {
-          return
-        }
-
-        reconnectAttemptRef.current = 0
-        setStatus('live')
+    socket.on('connect_error', () => {
+      if (socketRef.current !== socket) {
+        return
       }
 
-      socket.onmessage = (event) => {
-        try {
-          const envelope = JSON.parse(event.data) as SocketEnvelope
+      setStatus('connecting')
+    })
 
-          if (envelope.event === BTC_PRICE_UPDATED_EVENT) {
-            const payload = parseBtcLivePriceUpdate(envelope.data)
-            if (!payload) {
-              return
-            }
-
-            latestCallbackRef.current(payload)
-            return
-          }
-
-          if (envelope.event === BTC_VOLUME_UPDATED_EVENT) {
-            const payload = parseBtcLiveVolumeUpdate(envelope.data)
-            if (!payload) {
-              return
-            }
-
-            latestVolumeCallbackRef.current(payload)
-            return
-          }
-
-          if (envelope.event === USER_CREATED_EVENT) {
-            const payload = parseRealtimeUserEvent(envelope.data)
-            if (!payload) {
-              return
-            }
-
-            latestUserCreatedCallbackRef.current?.(payload)
-            return
-          }
-
-          if (envelope.event !== USER_UPDATED_EVENT) {
-            return
-          }
-
-          const payload = parseRealtimeUserEvent(envelope.data)
-          if (!payload) {
-            return
-          }
-
-          latestUserUpdatedCallbackRef.current?.(payload)
-        } catch {
-          // Ignore malformed socket messages and keep the connection alive.
-        }
+    socket.on(BTC_PRICE_UPDATED_EVENT, (payload: unknown) => {
+      const parsed = parseBtcLivePriceUpdate(payload)
+      if (!parsed) {
+        return
       }
 
-      socket.onerror = () => {
-        if (socketRef.current !== socket) {
-          return
-        }
+      latestCallbackRef.current(parsed)
+    })
 
-        setStatus('offline')
+    socket.on(BTC_VOLUME_UPDATED_EVENT, (payload: unknown) => {
+      const parsed = parseBtcLiveVolumeUpdate(payload)
+      if (!parsed) {
+        return
       }
 
-      socket.onclose = () => {
-        if (socketRef.current !== socket) {
-          return
-        }
+      latestVolumeCallbackRef.current(parsed)
+    })
 
-        socketRef.current = null
-        setStatus('offline')
-
-        if (!cancelled) {
-          scheduleReconnect()
-        }
+    socket.on(USER_CREATED_EVENT, (payload: unknown) => {
+      const parsed = parseRealtimeUserEvent(payload)
+      if (!parsed) {
+        return
       }
-    }
 
-    connect()
+      latestUserCreatedCallbackRef.current?.(parsed)
+    })
+
+    socket.on(USER_UPDATED_EVENT, (payload: unknown) => {
+      const parsed = parseRealtimeUserEvent(payload)
+      if (!parsed) {
+        return
+      }
+
+      latestUserUpdatedCallbackRef.current?.(parsed)
+    })
 
     return () => {
-      cancelled = true
-      clearReconnectTimer()
-      cleanupSocket()
+      socket.removeAllListeners()
+      socket.disconnect()
+
+      if (socketRef.current === socket) {
+        socketRef.current = null
+      }
+
       setStatus('offline')
     }
   }, [enabled])

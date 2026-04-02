@@ -2,56 +2,47 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDashboardSocket } from './useDashboardSocket'
 
-class MockWebSocket {
-  static instances: MockWebSocket[] = []
+class MockSocket {
+  static instances: MockSocket[] = []
 
-  onopen: ((event: Event) => void) | null = null
-  onmessage: ((event: MessageEvent) => void) | null = null
-  onerror: ((event: Event) => void) | null = null
-  onclose: ((event: Event) => void) | null = null
-  close = vi.fn(() => {
-    this.onclose?.(new Event('close'))
+  private handlers = new Map<string, Set<(...args: unknown[]) => void>>()
+  disconnect = vi.fn()
+  removeAllListeners = vi.fn(() => {
+    this.handlers.clear()
   })
 
-  constructor(public readonly url: string) {
-    MockWebSocket.instances.push(this)
+  constructor(public readonly url: string, public readonly options?: Record<string, unknown>) {
+    MockSocket.instances.push(this)
   }
 
-  emitOpen() {
-    this.onopen?.(new Event('open'))
+  on(event: string, handler: (...args: unknown[]) => void) {
+    const registered = this.handlers.get(event) ?? new Set<(...args: unknown[]) => void>()
+    registered.add(handler)
+    this.handlers.set(event, registered)
+    return this
   }
 
-  emitMessage(payload: unknown) {
-    this.onmessage?.({
-      data: JSON.stringify(payload),
-    } as MessageEvent)
-  }
-
-  emitError() {
-    this.onerror?.(new Event('error'))
-  }
-
-  emitClose() {
-    this.onclose?.(new Event('close'))
+  emitEvent(event: string, payload?: unknown) {
+    this.handlers.get(event)?.forEach((handler) => {
+      handler(payload)
+    })
   }
 
   static reset() {
-    MockWebSocket.instances = []
+    MockSocket.instances = []
   }
 }
 
-describe('useDashboardSocket', () => {
-  const originalWebSocket = window.WebSocket
+vi.mock('socket.io-client', () => ({
+  io: (url: string, options?: Record<string, unknown>) => new MockSocket(url, options),
+}))
 
+describe('useDashboardSocket', () => {
   beforeEach(() => {
-    MockWebSocket.reset()
-    vi.useFakeTimers()
-    window.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    MockSocket.reset()
   })
 
   afterEach(() => {
-    vi.useRealTimers()
-    window.WebSocket = originalWebSocket
     vi.restoreAllMocks()
   })
 
@@ -69,37 +60,31 @@ describe('useDashboardSocket', () => {
       }),
     )
 
-    const socket = MockWebSocket.instances[0]
+    const socket = MockSocket.instances[0]
 
     act(() => {
-      socket.emitOpen()
+      socket.emitEvent('connect')
     })
 
     expect(result.current).toBe('live')
 
     act(() => {
-      socket.emitMessage({
-        event: 'user.created',
-        data: {
-          id: 'user-1',
-          email: 'new@example.com',
-          displayName: 'New User',
-          role: 'USER',
-          isActive: true,
-          createdAt: '2026-04-01T10:00:00.000Z',
-        },
+      socket.emitEvent('user.created', {
+        id: 'user-1',
+        email: 'new@example.com',
+        displayName: 'New User',
+        role: 'USER',
+        isActive: true,
+        createdAt: '2026-04-01T10:00:00.000Z',
       })
-      socket.emitMessage({
-        event: 'user.updated',
-        data: {
-          id: 'user-2',
-          email: 'updated@example.com',
-          displayName: 'Updated User',
-          role: 'ADMIN',
-          isActive: true,
-          createdAt: '2026-04-01T09:00:00.000Z',
-          updatedAt: '2026-04-01T10:05:00.000Z',
-        },
+      socket.emitEvent('user.updated', {
+        id: 'user-2',
+        email: 'updated@example.com',
+        displayName: 'Updated User',
+        role: 'ADMIN',
+        isActive: true,
+        createdAt: '2026-04-01T09:00:00.000Z',
+        updatedAt: '2026-04-01T10:05:00.000Z',
       })
     })
 
@@ -123,10 +108,11 @@ describe('useDashboardSocket', () => {
 
     unmount()
 
-    expect(socket.close).toHaveBeenCalledTimes(1)
+    expect(socket.removeAllListeners).toHaveBeenCalledTimes(1)
+    expect(socket.disconnect).toHaveBeenCalledTimes(1)
   })
 
-  it('reconnects once after the current socket closes and ignores stale socket close events', async () => {
+  it('stays reconnectable after disconnect events and still delivers later price updates', async () => {
     const onPriceUpdated = vi.fn()
 
     const { result } = renderHook(() =>
@@ -137,47 +123,30 @@ describe('useDashboardSocket', () => {
       }),
     )
 
-    const firstSocket = MockWebSocket.instances[0]
+    const socket = MockSocket.instances[0]
 
     act(() => {
-      firstSocket.emitOpen()
+      socket.emitEvent('connect')
     })
 
     expect(result.current).toBe('live')
 
     act(() => {
-      firstSocket.emitClose()
-      vi.advanceTimersByTime(1000)
+      socket.emitEvent('disconnect')
     })
 
-    expect(MockWebSocket.instances).toHaveLength(2)
-
-    const secondSocket = MockWebSocket.instances[1]
+    expect(result.current).toBe('connecting')
 
     act(() => {
-      secondSocket.emitOpen()
-    })
-
-    expect(result.current).toBe('live')
-
-    act(() => {
-      firstSocket.emitClose()
-      vi.advanceTimersByTime(15000)
-    })
-
-    expect(MockWebSocket.instances).toHaveLength(2)
-
-    act(() => {
-      secondSocket.emitMessage({
-        event: 'btc.price.updated',
-        data: {
-          symbol: 'BTCUSDT',
-          price: 70123,
-          updatedAt: '2026-04-01T10:00:00.000Z',
-        },
+      socket.emitEvent('connect')
+      socket.emitEvent('btc.price.updated', {
+        symbol: 'BTCUSDT',
+        price: 70123,
+        updatedAt: '2026-04-01T10:00:00.000Z',
       })
     })
 
+    expect(result.current).toBe('live')
     expect(onPriceUpdated).toHaveBeenCalledWith({
       symbol: 'BTCUSDT',
       price: 70123,

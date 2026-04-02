@@ -33,6 +33,7 @@ describe('MarketDataService', () => {
       setNx: jest.fn(),
       subscribeOnce: jest.fn(),
       getClient: jest.fn().mockReturnValue({}),
+      isReady: jest.fn().mockReturnValue(true),
     } as unknown as jest.Mocked<RedisService>;
 
     binanceService = {
@@ -100,6 +101,35 @@ describe('MarketDataService', () => {
       cacheSource: 'stale',
       stale: true,
     });
+  });
+
+  it('returns stale cache when Binance responds with a fallback ticker payload', async () => {
+    const fallbackTicker: TickerDto = {
+      ...ticker,
+      price: '0',
+      volume24h: null,
+      priceChange24h: null,
+      priceChange24hPercent: null,
+      high24h: null,
+      low24h: null,
+      source: 'fallback',
+      stale: true,
+    };
+
+    redisService.get
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...ticker, stale: true });
+    redisService.setNx.mockResolvedValueOnce(true);
+    binanceService.getTicker.mockResolvedValueOnce(fallbackTicker);
+    redisService.del.mockResolvedValue();
+
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
+      ...ticker,
+      cacheSource: 'stale',
+      stale: true,
+    });
+
+    expect(redisService.set).not.toHaveBeenCalled();
   });
 
   it('waits for the fetcher publish when lock is already held', async () => {
@@ -298,6 +328,30 @@ describe('MarketDataService', () => {
     ]);
   });
 
+  it('omits tracked tickers when Binance only returns fallback payloads and no stale cache exists', async () => {
+    const fallbackTicker: TickerDto = {
+      ...ticker,
+      price: '0',
+      volume24h: null,
+      priceChange24h: null,
+      priceChange24hPercent: null,
+      high24h: null,
+      low24h: null,
+      source: 'fallback',
+      stale: true,
+    };
+
+    redisService.get.mockResolvedValue(null);
+    redisService.setNx.mockResolvedValue(true);
+    binanceService.getTicker
+      .mockResolvedValueOnce(fallbackTicker)
+      .mockResolvedValueOnce(fallbackTicker);
+    redisService.del.mockResolvedValue();
+
+    await expect(service.getTrackedTickers(2)).resolves.toEqual([]);
+    expect(redisService.set).not.toHaveBeenCalled();
+  });
+
   it('fetches directly from Binance when Redis is disabled', async () => {
     const btcTicker: TickerDto = {
       ...ticker,
@@ -315,5 +369,24 @@ describe('MarketDataService', () => {
     expect(redisService.setNx).not.toHaveBeenCalled();
     expect(redisService.subscribeOnce).not.toHaveBeenCalled();
     expect(binanceService.getTicker).toHaveBeenCalledWith('BTCUSDT');
+  });
+
+  it('fetches directly from Binance when Redis client exists but connection is closed', async () => {
+    const btcTicker: TickerDto = {
+      ...ticker,
+      symbol: 'BTCUSDT',
+    };
+
+    redisService.getClient.mockReturnValueOnce({} as never);
+    redisService.isReady.mockReturnValueOnce(false);
+    binanceService.getTicker.mockResolvedValueOnce(btcTicker);
+
+    await expect(service.getTicker('BTCUSDT')).resolves.toMatchObject({
+      ...btcTicker,
+      cacheSource: 'fresh',
+    });
+
+    expect(redisService.setNx).not.toHaveBeenCalled();
+    expect(redisService.subscribeOnce).not.toHaveBeenCalled();
   });
 });

@@ -32,35 +32,40 @@ vi.mock('react-apexcharts', () => ({
   default: ({ type }: { type: string }) => <div data-testid={`apex-chart-${type}`} />,
 }))
 
-class MockWebSocket {
-  static instances: MockWebSocket[] = []
+class MockSocket {
+  static instances: MockSocket[] = []
 
-  onopen: ((event: Event) => void) | null = null
-  onmessage: ((event: MessageEvent) => void) | null = null
-  onerror: ((event: Event) => void) | null = null
-  onclose: ((event: Event) => void) | null = null
-  close = vi.fn(() => {
-    this.onclose?.(new Event('close'))
+  private handlers = new Map<string, Set<(...args: unknown[]) => void>>()
+  disconnect = vi.fn()
+  removeAllListeners = vi.fn(() => {
+    this.handlers.clear()
   })
 
-  constructor(public readonly url: string) {
-    MockWebSocket.instances.push(this)
+  constructor(public readonly url: string, public readonly options?: Record<string, unknown>) {
+    MockSocket.instances.push(this)
   }
 
-  emitOpen() {
-    this.onopen?.(new Event('open'))
+  on(event: string, handler: (...args: unknown[]) => void) {
+    const registered = this.handlers.get(event) ?? new Set<(...args: unknown[]) => void>()
+    registered.add(handler)
+    this.handlers.set(event, registered)
+    return this
   }
 
-  emitMessage(payload: unknown) {
-    this.onmessage?.({
-      data: JSON.stringify(payload),
-    } as MessageEvent)
+  emitEvent(event: string, payload?: unknown) {
+    this.handlers.get(event)?.forEach((handler) => {
+      handler(payload)
+    })
   }
 
   static reset() {
-    MockWebSocket.instances = []
+    MockSocket.instances = []
   }
 }
+
+vi.mock('socket.io-client', () => ({
+  io: (url: string, options?: Record<string, unknown>) => new MockSocket(url, options),
+}))
 
 const dashboardSummary: DashboardSummaryData = {
   userCount: 2,
@@ -154,12 +159,9 @@ function getBtcPriceTrendSection() {
 }
 
 describe('DashboardPage realtime integration', () => {
-  const originalWebSocket = window.WebSocket
-
   beforeEach(() => {
-    MockWebSocket.reset()
+    MockSocket.reset()
     window.localStorage.setItem('accessToken', 'test-token')
-    window.WebSocket = MockWebSocket as unknown as typeof WebSocket
     vi.mocked(getDashboardSummary).mockResolvedValue(structuredClone(dashboardSummary))
     vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: 'user-1',
@@ -173,7 +175,6 @@ describe('DashboardPage realtime integration', () => {
 
   afterEach(() => {
     window.localStorage.clear()
-    window.WebSocket = originalWebSocket
     vi.restoreAllMocks()
   })
 
@@ -188,20 +189,17 @@ describe('DashboardPage realtime integration', () => {
     const priceTrendSection = getBtcPriceTrendSection()
     expect(within(priceTrendSection).getByText('$67,813')).toBeTruthy()
 
-    const socket = MockWebSocket.instances[0]
+    const socket = MockSocket.instances[0]
 
-    socket.emitOpen()
-    socket.emitMessage({
-      event: 'btc.price.updated',
-      data: {
-        symbol: 'BTCUSDT',
-        price: 70123,
-        change24h: 1500,
-        change24hPercent: 2.14,
-        high24h: 70500,
-        low24h: 66000,
-        updatedAt: '2026-04-01T09:15:00.000Z',
-      },
+    socket.emitEvent('connect')
+    socket.emitEvent('btc.price.updated', {
+      symbol: 'BTCUSDT',
+      price: 70123,
+      change24h: 1500,
+      change24hPercent: 2.14,
+      high24h: 70500,
+      low24h: 66000,
+      updatedAt: '2026-04-01T09:15:00.000Z',
     })
 
     await waitFor(() => {

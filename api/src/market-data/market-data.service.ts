@@ -452,8 +452,9 @@ export class MarketDataService {
   async getTicker(symbol: string): Promise<TickerDto> {
     const normalizedSymbol = this.normalizeSymbol(symbol);
     const redisClient = this.redisService.getClient();
+    const redisReady = this.redisService.isReady();
 
-    if (!redisClient) {
+    if (!redisClient || !redisReady) {
       this.logger.warn(
         `Redis unavailable; fetching ticker directly for ${normalizedSymbol}`,
       );
@@ -579,6 +580,13 @@ export class MarketDataService {
   ): Promise<TickerDto> {
     try {
       const ticker = await this.binanceService.getTicker(symbol);
+
+      if (this.isUnavailableTicker(ticker)) {
+        throw new BinanceUnavailableException(
+          `Fallback ticker payload returned for ${symbol}`,
+        );
+      }
+
       this.logger.log(`Ticker Binance fetch success for ${symbol}`);
       return this.stripRuntimeCacheFlags(ticker);
     } catch (error) {
@@ -595,6 +603,13 @@ export class MarketDataService {
   ): Promise<TickerDto> {
     try {
       const ticker = await this.binanceService.getTicker(symbol);
+
+      if (this.isUnavailableTicker(ticker)) {
+        throw new BinanceUnavailableException(
+          `Fallback ticker payload returned for ${symbol}`,
+        );
+      }
+
       this.logger.log(`Ticker direct Binance fetch success for ${symbol}`);
       return this.stripRuntimeCacheFlags(ticker);
     } catch (error) {
@@ -718,6 +733,17 @@ export class MarketDataService {
 
   private isStaleTicker(ticker: TickerDto): boolean {
     return ticker.cacheSource === 'stale' || ticker.stale === true;
+  }
+
+  private isUnavailableTicker(ticker: TickerDto): boolean {
+    if (ticker.stale === true || ticker.source === 'fallback') {
+      return true;
+    }
+
+    const price = this.toFiniteNumber(ticker.price);
+    const volume24h = this.toFiniteNumber(ticker.volume24h);
+
+    return price <= 0 || volume24h <= 0;
   }
 
   private normalizeSymbol(symbol: string): string {
