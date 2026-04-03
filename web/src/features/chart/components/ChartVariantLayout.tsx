@@ -78,37 +78,37 @@ function MarketTrendHeader({
         : 'bg-slate-500/80'
 
   return (
-    <div className="relative z-[1] mb-1 flex items-center justify-between gap-4 px-0.5">
-      <div className="inline-flex rounded-lg border border-white/6 bg-white/[0.03] p-0.5 self-start">
+    <div className="relative z-[1] mb-1 flex flex-col gap-3 px-0.5 md:flex-row md:items-start md:justify-between">
+      <div className="inline-flex max-w-full self-start rounded-lg border border-white/6 bg-white/[0.03] p-0.5">
         {rangeLabels.map((rangeLabel, index) => {
           const rangeKey = rangeKeys[index] ?? '1h'
           const isActive = selectedRange === rangeKey
 
           return (
-          <button
-            key={rangeLabel}
-            type="button"
-            onPointerDown={onControlPointerDown}
-            onClick={() => {
-              if (!onRangeChange || isActive) {
-                return
-              }
+            <button
+              key={rangeLabel}
+              type="button"
+              onPointerDown={onControlPointerDown}
+              onClick={() => {
+                if (!onRangeChange || isActive) {
+                  return
+                }
 
-              onRangeChange(rangeKey)
-            }}
-            disabled={isRangeUpdating && !isActive}
-            className={`rounded-md px-3.5 py-1.5 text-[11px] font-medium transition ${
-              isActive
-                ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                : 'text-slate-400 hover:text-slate-200'
-            } ${isRangeUpdating && !isActive ? 'cursor-wait opacity-70' : ''}`}
-          >
-            {rangeLabel}
-          </button>
+                onRangeChange(rangeKey)
+              }}
+              disabled={isRangeUpdating && !isActive}
+              className={`rounded-md px-2.5 py-1.5 text-[11px] font-medium transition sm:px-3.5 ${
+                isActive
+                  ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              } ${isRangeUpdating && !isActive ? 'cursor-wait opacity-70' : ''}`}
+            >
+              {rangeLabel}
+            </button>
         )})}
       </div>
-      <div className="flex min-w-[112px] flex-col items-end justify-center text-right">
-        <div className="flex items-center gap-2 text-[0.62rem] uppercase tracking-[0.22em]">
+      <div className="flex min-w-0 flex-col justify-center text-left md:min-w-[112px] md:items-end md:text-right">
+        <div className="flex flex-wrap items-center gap-2 text-[0.62rem] tracking-[0.14em] sm:uppercase sm:tracking-[0.22em]">
           <span className="text-slate-500">Live Price</span>
           <span
             data-testid="btc-live-status"
@@ -118,10 +118,7 @@ function MarketTrendHeader({
             <span>{liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Syncing' : 'Offline'}</span>
           </span>
         </div>
-        <div
-          data-testid="btc-live-price"
-          className="mt-0.5 text-[1.15rem] font-semibold leading-none text-[#E5E7EB]"
-        >
+        <div data-testid="btc-live-price" className="mt-0.5 text-[1.05rem] font-semibold leading-none text-[#E5E7EB] sm:text-[1.15rem]">
           {lineMetrics.latestValue !== null
             ? `$${Math.round(lineMetrics.latestValue).toLocaleString()}`
             : '--'}
@@ -155,9 +152,9 @@ function DailyPnlHeader({
     dailyPnlRange === 'month' ? 'Monthly Net' : dailyPnlRange === 'year' ? 'Yearly Net' : 'Weekly Net'
 
   return (
-    <div className="mb-1.5 flex items-center justify-between gap-4">
+    <div className="mb-1.5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div className="min-w-0">
-        <div className="text-[0.64rem] uppercase tracking-[0.24em] text-slate-500">
+        <div className="text-[0.64rem] tracking-[0.16em] text-slate-500 sm:uppercase sm:tracking-[0.24em]">
           {netLabel}
         </div>
         <div
@@ -168,8 +165,8 @@ function DailyPnlHeader({
           {`${dailyPnlMetrics.total >= 0 ? '+' : ''}${dailyPnlMetrics.total.toLocaleString()}`}
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="inline-flex rounded-lg border border-white/6 bg-white/[0.03] p-0.5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex max-w-full rounded-lg border border-white/6 bg-white/[0.03] p-0.5">
           {rangeLabels.map((rangeLabel, index) => {
             const rangeKey = rangeKeys[index] ?? 'week'
             const isActive = dailyPnlRange === rangeKey
@@ -187,7 +184,7 @@ function DailyPnlHeader({
                   onDailyPnlRangeChange(rangeKey)
                 }}
                 disabled={isDailyPnlUpdating && !isActive}
-                className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition ${
+                className={`rounded-md px-2.5 py-1.5 text-[11px] font-medium transition sm:px-3 ${
                   isActive
                     ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
                     : 'text-slate-400 hover:text-slate-200'
@@ -198,7 +195,7 @@ function DailyPnlHeader({
             )
           })}
         </div>
-        <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">
+        <div className="flex flex-wrap items-center gap-2 text-[0.68rem] tracking-[0.14em] text-slate-500 sm:uppercase sm:tracking-[0.22em]">
           <span>Win</span>
           <span className="text-sm font-semibold tracking-normal text-[#22C55E]">
             {dailyPnlMetrics.positiveDays}
@@ -238,8 +235,8 @@ function VolumeProfileHeader({
       : '--'
 
   return (
-    <div className="mb-2 flex items-center justify-between gap-3">
-      <div className="inline-flex rounded-lg border border-white/6 bg-white/[0.03] p-0.5">
+    <div className="mb-2 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="inline-flex max-w-full self-start rounded-lg border border-white/6 bg-white/[0.03] p-0.5">
         {rangeLabels.map((rangeLabel, index) => {
           const rangeKey = rangeKeys[index] ?? '1h'
           const isActive = selectedVolumeTimeframe === rangeKey
@@ -257,7 +254,7 @@ function VolumeProfileHeader({
                 onVolumeTimeframeChange(rangeKey)
               }}
               disabled={isVolumeUpdating && !isActive}
-              className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition ${
+              className={`rounded-md px-2.5 py-1.5 text-[11px] font-medium transition sm:px-3 ${
                 isActive
                   ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
                   : 'text-slate-400 hover:text-slate-200'
@@ -268,8 +265,8 @@ function VolumeProfileHeader({
           )
         })}
       </div>
-      <div className="text-right">
-        <div className="text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
+      <div className="text-left md:text-right">
+        <div className="text-[0.62rem] tracking-[0.14em] text-slate-500 sm:uppercase sm:tracking-[0.22em]">
           Total Volume
         </div>
         <div className="mt-1 text-sm font-semibold text-slate-200">
@@ -282,7 +279,7 @@ function VolumeProfileHeader({
 
 function DailyPnlFooter({ dailyPnlMetrics }: { dailyPnlMetrics: DailyPnlMetrics }) {
   return (
-    <div className="mt-3 flex items-end justify-between gap-4 border-t border-white/6 pt-2">
+    <div className="mt-3 flex flex-wrap items-end justify-between gap-4 border-t border-white/6 pt-2">
       <div>
         <div className="text-[0.64rem] uppercase tracking-[0.22em] text-slate-500">Best</div>
         <div className="mt-1 text-sm font-semibold text-[#22C55E]">
@@ -319,7 +316,7 @@ function LineTrendFooter({
   lineMetrics: LineTrendMetrics
 }) {
   return (
-    <div className="relative z-[1] mt-3 flex items-end justify-between gap-3 border-t border-white/6 pt-2.5">
+    <div className="relative z-[1] mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-white/6 pt-2.5">
       <div>
         {variantFlags.isMarketTrendWidget ? (
           <div className="text-[0.64rem] uppercase tracking-[0.2em] text-slate-500">
@@ -327,11 +324,11 @@ function LineTrendFooter({
           </div>
         ) : (
           <>
-            <div className="text-[0.72rem] uppercase tracking-[0.22em] text-slate-500">
+            <div className="text-[0.72rem] tracking-[0.14em] text-slate-500 sm:uppercase sm:tracking-[0.22em]">
               Total Change
             </div>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold text-slate-100">
+              <span className="text-2xl font-semibold text-slate-100 sm:text-3xl">
                 {lineMetrics.latestValue?.toLocaleString() ?? '--'}
               </span>
               <span className={`text-base font-medium ${lineMetrics.trendColorClass}`}>
@@ -342,7 +339,7 @@ function LineTrendFooter({
         )}
       </div>
       <div className="text-right">
-        <div className="text-[0.64rem] uppercase tracking-[0.2em] text-slate-500">
+        <div className="text-[0.64rem] tracking-[0.14em] text-slate-500 sm:uppercase sm:tracking-[0.2em]">
           {variantFlags.isMarketTrendWidget ? '24H Change' : 'Performance'}
         </div>
         {variantFlags.isMarketTrendWidget ? (
@@ -350,7 +347,7 @@ function LineTrendFooter({
             {lineMetrics.formattedChange} ({lineMetrics.formattedChangePercent})
           </div>
         ) : (
-          <div className={`mt-1 text-3xl font-semibold ${lineMetrics.trendColorClass}`}>
+          <div className={`mt-1 text-2xl font-semibold sm:text-3xl ${lineMetrics.trendColorClass}`}>
             {lineMetrics.deltaPercent !== null
               ? `${lineMetrics.deltaPercent > 0 ? '+' : ''}${lineMetrics.deltaPercent.toFixed(1)}%`
               : '--'}

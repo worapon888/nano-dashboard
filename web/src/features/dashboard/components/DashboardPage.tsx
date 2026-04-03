@@ -42,7 +42,7 @@ function NavItem({ label, active = false }: NavItemProps) {
     <button
       type="button"
       className={[
-        'rounded-full border px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.24em] transition-colors',
+        'rounded-full border px-2.5 py-1.5 text-[0.64rem] font-medium tracking-[0.14em] transition-colors sm:px-3 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.24em]',
         active
           ? 'border-emerald-400/25 bg-emerald-400/8 text-slate-100'
           : 'border-white/6 bg-white/[0.02] text-slate-500 hover:border-white/12 hover:text-slate-300',
@@ -72,7 +72,7 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        'rounded-full border px-3.5 py-2 text-[0.68rem] font-medium uppercase tracking-[0.22em] transition-all',
+        'rounded-full border px-3 py-2 text-[0.64rem] font-medium tracking-[0.14em] transition-all sm:px-3.5 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.22em]',
         variant === 'primary'
           ? 'border-emerald-400/20 bg-emerald-400/10 text-slate-100 shadow-[0_0_0_1px_rgba(74,222,128,0.04)] hover:border-emerald-300/30 hover:bg-emerald-400/14'
           : 'border-white/8 bg-white/[0.02] text-slate-300 hover:border-white/14 hover:bg-white/[0.04] hover:text-white',
@@ -99,13 +99,13 @@ function StatusBadge({ loading, error, stale = false }: StatusBadgeProps) {
   const pulseClass = error || stale ? 'bg-amber-400/35' : 'bg-emerald-400/35'
 
   return (
-    <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.22em] text-slate-200 ${toneClass}`}>
+    <div className={`inline-flex max-w-full flex-wrap items-center gap-2 rounded-full px-3 py-1.5 text-[0.64rem] font-medium tracking-[0.14em] text-slate-200 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.22em] ${toneClass}`}>
       <span className="relative flex h-2 w-2">
         <span className={`absolute inset-0 rounded-full ${pulseClass}`} />
         <span className={`relative rounded-full p-1 ${dotClass}`} />
       </span>
       <span className="text-slate-300">Dashboard API</span>
-      <span className="text-slate-500">&bull;</span>
+      <span className="hidden text-slate-500 sm:inline">&bull;</span>
       <span className="text-slate-100">{label}</span>
     </div>
   )
@@ -636,15 +636,15 @@ function Header({
 }: HeaderProps) {
   return (
     <header className="border-b border-white/8 pb-5">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex min-w-0 flex-1 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between xl:max-w-[72%] xl:gap-8">
+      <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-5 xl:flex-row xl:items-end xl:justify-between 2xl:max-w-[72%] 2xl:gap-8">
           <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <p className="text-[0.72rem] font-semibold uppercase tracking-[0.32em] text-slate-400">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-[0.68rem] font-semibold tracking-[0.22em] text-slate-400 sm:text-[0.72rem] sm:uppercase sm:tracking-[0.32em]">
                 NANODASHBOARD
               </p>
               <span className="hidden h-1 w-1 rounded-full bg-emerald-300/80 sm:block" />
-              <p className="hidden text-[0.68rem] uppercase tracking-[0.24em] text-slate-500 sm:block">
+              <p className="text-[0.64rem] tracking-[0.14em] text-slate-500 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.24em]">
                 Authenticated Workspace
               </p>
             </div>
@@ -657,7 +657,7 @@ function Header({
           </div>
 
           <div className="min-w-0 xl:pb-0.5">
-            <p className="text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">
+            <p className="text-[0.64rem] tracking-[0.16em] text-slate-500 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.28em]">
               Live market overview
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-[0.01em] text-white sm:text-3xl">
@@ -670,22 +670,22 @@ function Header({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
+        <div className="flex flex-wrap items-stretch gap-2.5 sm:items-center 2xl:justify-end">
           {realtimeNotice ? (
             <div
               data-testid="realtime-notice"
-              className="inline-flex items-center rounded-full border border-sky-400/16 bg-sky-400/8 px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.18em] text-sky-100"
+              className="inline-flex max-w-full items-center rounded-full border border-sky-400/16 bg-sky-400/8 px-3 py-1.5 text-[0.64rem] font-medium tracking-[0.14em] text-sky-100 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.18em]"
             >
               {realtimeNotice}
             </div>
           ) : null}
           {stale ? (
-            <div className="inline-flex items-center rounded-full border border-amber-400/16 bg-amber-400/8 px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.18em] text-amber-100">
+            <div className="inline-flex items-center rounded-full border border-amber-400/16 bg-amber-400/8 px-3 py-1.5 text-[0.64rem] font-medium tracking-[0.14em] text-amber-100 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.18em]">
               Showing cached snapshot
             </div>
           ) : null}
           {warnings.length > 0 ? (
-            <div className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.18em] text-slate-200">
+            <div className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.04] px-3 py-1.5 text-[0.64rem] font-medium tracking-[0.14em] text-slate-200 sm:text-[0.68rem] sm:uppercase sm:tracking-[0.18em]">
               {warnings.length} section{warnings.length === 1 ? '' : 's'} delayed
             </div>
           ) : null}
@@ -867,7 +867,7 @@ function ActiveUsersWidget({
 
   return (
     <div>
-      <p className="text-4xl font-semibold tracking-[-0.03em] text-white">
+      <p className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
         {formatNumber(userCount)}
       </p>
       <p className="mt-2 text-sm text-slate-400">
@@ -922,7 +922,7 @@ function MarketOverviewWidget({
         <p className="text-[0.66rem] uppercase tracking-[0.22em] text-slate-500">
           BTC Dominance
         </p>
-        <p className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white">
+        <p className="mt-3 text-[1.75rem] font-semibold tracking-[-0.03em] text-white sm:text-3xl">
           {marketOverview.btcDominance.toFixed(2)}%
         </p>
       </div>
@@ -930,7 +930,7 @@ function MarketOverviewWidget({
         <p className="text-[0.66rem] uppercase tracking-[0.22em] text-slate-500">
           Fear &amp; Greed
         </p>
-        <p className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white">
+        <p className="mt-3 text-[1.75rem] font-semibold tracking-[-0.03em] text-white sm:text-3xl">
           {formatNumber(marketOverview.fearGreedIndex)}
         </p>
       </div>
@@ -979,7 +979,7 @@ function TopMoverRow({ mover }: { mover: DashboardTopMover }) {
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-white/6 pt-2">
+      <div className="mt-2 grid grid-cols-1 gap-1.5 border-t border-white/6 pt-2 sm:grid-cols-3">
         <div className="rounded-[0.8rem] border border-white/6 bg-white/[0.02] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
           <p className="text-[0.58rem] uppercase tracking-[0.18em] text-slate-600">Volume</p>
           <p className="mt-0.5 text-[0.77rem] font-medium tracking-[0.01em] text-slate-100">

@@ -89,19 +89,19 @@ function WidgetShell({
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[inherit]">
         <header
           onPointerDown={onHeaderPointerDown}
-          className={`relative flex items-start justify-between border-b border-white/8 bg-[#101010] px-4 py-3 sm:px-5 ${onHeaderPointerDown ? 'touch-none' : ''} ${headerClassName}`}
+          className={`relative flex flex-wrap items-start justify-between gap-3 border-b border-white/8 bg-[#101010] px-4 py-3 sm:px-5 ${onHeaderPointerDown ? 'touch-none' : ''} ${headerClassName}`}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="truncate text-[0.95rem] font-semibold tracking-[0.01em] text-slate-100">
               {title}
             </h2>
             {subtitle ? (
-              <p className="mt-1 text-[0.78rem] uppercase tracking-[0.28em] text-slate-400">
+              <p className="mt-1 text-[0.72rem] tracking-[0.18em] text-slate-400 sm:text-[0.78rem] sm:uppercase sm:tracking-[0.24em]">
                 {subtitle}
               </p>
             ) : null}
           </div>
-          {action ? <div className="ml-4 pt-1 text-sm text-slate-400">{action}</div> : null}
+          {action ? <div className="shrink-0 self-start pt-1 text-sm text-slate-400 sm:ml-4">{action}</div> : null}
         </header>
 
         <div className={`flex min-h-0 flex-1 flex-col bg-[#0a0a0a] text-sm text-slate-300 ${bodyClassName}`}>
