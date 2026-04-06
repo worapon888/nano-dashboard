@@ -1,12 +1,16 @@
 import axios from 'axios'
-import { apiClient } from './api'
+import { apiBaseUrl, apiClient } from './api'
+import type { AuthTokens } from './auth-storage'
+import { getRefreshToken } from './auth-storage'
 
-interface LoginPayload {
+interface AuthPayload {
   success: true
   data: {
     accessToken: string
+    refreshToken: string
     tokenType: string
     expiresIn: string
+    refreshExpiresIn: string
   }
 }
 
@@ -58,10 +62,13 @@ function normalizeAuthError(error: unknown): Error {
   return new Error('Authentication failed. Please try again.')
 }
 
-export async function login(email: string, password: string): Promise<string> {
+export async function login(email: string, password: string): Promise<AuthTokens> {
   try {
-    const response = await apiClient.post<LoginPayload>('/auth/login', { email, password })
-    return response.data.data.accessToken
+    const response = await apiClient.post<AuthPayload>('/auth/login', { email, password })
+    return {
+      accessToken: response.data.data.accessToken,
+      refreshToken: response.data.data.refreshToken,
+    }
   } catch (error) {
     throw normalizeAuthError(error)
   }
@@ -69,13 +76,12 @@ export async function login(email: string, password: string): Promise<string> {
 
 /**
  * Registers a new user then immediately logs them in.
- * Returns the accessToken so callers treat it identically to login().
  */
 export async function register(
   email: string,
   password: string,
   displayName: string,
-): Promise<string> {
+): Promise<AuthTokens> {
   try {
     await apiClient.post('/auth/register', { email, password, displayName })
     return login(email, password)
@@ -84,8 +90,27 @@ export async function register(
   }
 }
 
-export async function loginDemoUser(): Promise<string> {
+export async function loginDemoUser(): Promise<AuthTokens> {
   return login('admin@example.com', '12345678')
+}
+
+export async function refreshTokens(refreshToken = getRefreshToken()): Promise<AuthTokens> {
+  if (!refreshToken) {
+    throw new Error('No refresh token available.')
+  }
+
+  try {
+    const response = await axios.post<AuthPayload>(`${apiBaseUrl}/auth/refresh`, {
+      refreshToken,
+    })
+
+    return {
+      accessToken: response.data.data.accessToken,
+      refreshToken: response.data.data.refreshToken,
+    }
+  } catch (error) {
+    throw normalizeAuthError(error)
+  }
 }
 
 export async function getAuthenticatedUser(token: string): Promise<AuthenticatedUser> {

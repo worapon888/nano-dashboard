@@ -5,6 +5,7 @@ import type {
   BtcLiveVolumeUpdate,
   RealtimeUserEvent,
 } from '../../../types/dashboard'
+import { getAccessToken } from '../../../services/auth-storage'
 
 type DashboardSocketStatus = 'connecting' | 'live' | 'offline'
 
@@ -196,7 +197,7 @@ export function useDashboardSocket({
       return
     }
 
-    const accessToken = window.localStorage.getItem('accessToken')
+    const accessToken = getAccessToken()
     setStatus('connecting')
 
     const socket = io(getDashboardSocketUrl(), {

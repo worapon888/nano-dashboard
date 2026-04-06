@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { login } from '../services/auth.service'
+import { setAuthTokens } from '../services/auth-storage'
 
 type LoginPageProps = {
   onLoginSuccess: () => void
@@ -17,8 +18,8 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setLoading(true)
 
     try {
-      const accessToken = await login(email.trim(), password)
-      window.localStorage.setItem('accessToken', accessToken)
+      const tokens = await login(email.trim(), password)
+      setAuthTokens(tokens)
       onLoginSuccess()
     } catch (err) {
       const message =

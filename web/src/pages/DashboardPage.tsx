@@ -10,6 +10,12 @@ import {
   type AuthenticatedUser,
 } from '../services/auth.service'
 import {
+  clearAuthTokens,
+  getAccessToken,
+  setAuthTokens,
+  type AuthTokens,
+} from '../services/auth-storage'
+import {
   listUsers,
   softDeleteUser,
   updateUserDisplayName,
@@ -278,14 +284,14 @@ const REALTIME_SUMMARY_REFRESH_DELAY_MS = 300
 
 function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(
-    () => Boolean(window.localStorage.getItem('accessToken')),
+    () => Boolean(getAccessToken()),
   )
 
   // Dashboard data states
   const [data, setData] = useState<DashboardSummaryData | null>(null)
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null)
   const [loading, setLoading] = useState(
-    () => Boolean(window.localStorage.getItem('accessToken')),
+    () => Boolean(getAccessToken()),
   )
   const [error, setError] = useState<string | null>(null)
   const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null)
@@ -319,7 +325,7 @@ function DashboardPage() {
     setLoading(true)
     setError(null)
 
-    const token = window.localStorage.getItem('accessToken')
+    const token = getAccessToken()
 
     if (!token) {
       setIsAuthenticated(false)
@@ -339,7 +345,7 @@ function DashboardPage() {
       const status = getHttpStatus(loadError)
 
       if (status === 401) {
-        window.localStorage.removeItem('accessToken')
+        clearAuthTokens()
         setData(null)
         setError(null)
         setAuthError('Session expired. Please sign in again.')
@@ -356,7 +362,7 @@ function DashboardPage() {
   }
 
   async function loadCurrentUser() {
-    const token = window.localStorage.getItem('accessToken')
+    const token = getAccessToken()
 
     if (!token) {
       setCurrentUser(null)
@@ -370,7 +376,7 @@ function DashboardPage() {
       const status = getHttpStatus(loadError)
 
       if (status === 401) {
-        window.localStorage.removeItem('accessToken')
+        clearAuthTokens()
         setCurrentUser(null)
         setData(null)
         setError(null)
@@ -381,7 +387,7 @@ function DashboardPage() {
   }
 
   async function loadManagedUsers() {
-    const token = window.localStorage.getItem('accessToken')
+    const token = getAccessToken()
 
     if (!token) {
       setManagedUsers([])
@@ -597,7 +603,7 @@ function DashboardPage() {
   }
 
   function handleLogout() {
-    window.localStorage.removeItem('accessToken')
+    clearAuthTokens()
     if (realtimeNoticeTimerRef.current !== null) {
       window.clearTimeout(realtimeNoticeTimerRef.current)
       realtimeNoticeTimerRef.current = null
@@ -622,14 +628,14 @@ function DashboardPage() {
   // Unified auth handler — wraps demo login, login, and register
   // ------------------------------------------------------------------
 
-  async function handleAuth(getToken: () => Promise<string>) {
+  async function handleAuth(getTokens: () => Promise<AuthTokens>) {
     setAuthLoading(true)
     setAuthError(null)
 
     try {
-      const accessToken = await getToken()
-      window.localStorage.setItem('accessToken', accessToken)
-      const user = await getAuthenticatedUser(accessToken)
+      const tokens = await getTokens()
+      setAuthTokens(tokens)
+      const user = await getAuthenticatedUser(tokens.accessToken)
       setCurrentUser(user)
       setData(null)
       setError(null)
@@ -680,7 +686,7 @@ function DashboardPage() {
       onRefresh={loadDashboardSummary}
       onRefreshUsers={loadManagedUsers}
       onUpdateDisplayName={async (userId, displayName) => {
-        const token = window.localStorage.getItem('accessToken')
+        const token = getAccessToken()
 
         if (!token) {
           return
@@ -717,7 +723,7 @@ function DashboardPage() {
         }
       }}
       onDeleteUser={async (userId) => {
-        const token = window.localStorage.getItem('accessToken')
+        const token = getAccessToken()
 
         if (!token) {
           return
