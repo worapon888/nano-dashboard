@@ -111,7 +111,23 @@ nanodashboard/
 
 ## Quick Start
 
-### 1. Start infrastructure
+### 1. Start everything with Docker Compose
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- PostgreSQL on `localhost:5432`
+- Redis on `localhost:6379`
+- Backend API on `http://localhost:3000/api`
+- Swagger UI on `http://localhost:3000/api/docs`
+- Frontend on `http://localhost:5173`
+
+The backend container automatically runs Prisma migrations and seeds demo data on startup.
+
+### 2. Start infrastructure only
 
 ```bash
 docker-compose up -d
@@ -122,7 +138,7 @@ This starts:
 - PostgreSQL on `localhost:5432`
 - Redis on `localhost:6379`
 
-### 2. Start the backend
+### 3. Start the backend
 
 ```bash
 cd api
@@ -157,7 +173,7 @@ Backend URLs:
 - Swagger UI: `http://localhost:3000/api/docs`
 - OpenAPI JSON: `http://localhost:3000/api/docs-json`
 
-### 3. Start the frontend
+### 4. Start the frontend
 
 ```bash
 cd web

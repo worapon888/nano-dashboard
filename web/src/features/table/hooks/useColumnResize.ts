@@ -102,10 +102,10 @@ function useColumnResize({
         )
       }
 
-      const handleMouseMove = (e: MouseEvent) => {
+      const updateWidth = (clientX: number) => {
         const state = resizeStateRef.current
         if (!state) return
-        const delta = e.clientX - state.startX
+        const delta = clientX - state.startX
         const nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
 
         if (liveColumnWidthsRef.current[state.columnKey] === nextWidth) {
@@ -122,6 +122,24 @@ function useColumnResize({
         }
       }
 
+      const handlePointerMove = (e: PointerEvent) => {
+        const state = resizeStateRef.current
+
+        if (!state || e.pointerId !== state.pointerId) {
+          return
+        }
+
+        updateWidth(e.clientX)
+      }
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (resizeStateRef.current === null) {
+          return
+        }
+
+        updateWidth(e.clientX)
+      }
+
       const cleanup = () => {
         resizeStateRef.current = null
         setResizingColumn(null)
@@ -134,16 +152,42 @@ function useColumnResize({
         )
         document.body.style.cursor = savedCursor
         document.body.style.userSelect = savedUserSelect
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', handlePointerUp)
+        window.removeEventListener('pointercancel', handlePointerCancel)
         window.removeEventListener('mousemove', handleMouseMove)
         window.removeEventListener('mouseup', handleMouseUp)
         cleanupRef.current = null
       }
 
+      const handlePointerUp = (e: PointerEvent) => {
+        if (e.pointerId !== resizeStateRef.current?.pointerId) {
+          return
+        }
+
+        cleanup()
+      }
+
+      const handlePointerCancel = (e: PointerEvent) => {
+        if (e.pointerId !== resizeStateRef.current?.pointerId) {
+          return
+        }
+
+        cleanup()
+      }
+
       const handleMouseUp = () => {
+        if (resizeStateRef.current === null) {
+          return
+        }
+
         cleanup()
       }
 
       cleanupRef.current = cleanup
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', handlePointerUp)
+      window.addEventListener('pointercancel', handlePointerCancel)
       window.addEventListener('mousemove', handleMouseMove)
       window.addEventListener('mouseup', handleMouseUp)
     },

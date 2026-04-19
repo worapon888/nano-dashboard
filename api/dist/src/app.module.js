@@ -13,6 +13,7 @@ const auth_module_1 = require("./auth/auth.module");
 const binance_module_1 = require("./binance/binance.module");
 const dashboard_module_1 = require("./dashboard/dashboard.module");
 const events_module_1 = require("./events/events.module");
+const health_module_1 = require("./health/health.module");
 const market_data_module_1 = require("./market-data/market-data.module");
 const orders_module_1 = require("./orders/orders.module");
 const prisma_module_1 = require("./prisma/prisma.module");
@@ -28,6 +29,7 @@ exports.AppModule = AppModule = __decorate([
             prisma_module_1.PrismaModule,
             redis_module_1.RedisModule,
             events_module_1.EventsModule,
+            health_module_1.HealthModule,
             users_module_1.UsersModule,
             auth_module_1.AuthModule,
             binance_module_1.BinanceModule,
