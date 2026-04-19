@@ -6,6 +6,10 @@ describe('DashboardService retry/timeout/fallback policy', () => {
       getActiveCount: jest.fn().mockResolvedValue(3),
     };
 
+    const binanceService = {
+      getPrice: jest.fn(),
+    };
+
     const marketDataService = {
       getTrackedTickers: jest.fn().mockResolvedValue([
         {
@@ -115,6 +119,7 @@ describe('DashboardService retry/timeout/fallback policy', () => {
 
     const service = new DashboardService(
       usersService as never,
+      binanceService as never,
       marketDataService as never,
       ordersService as never,
       pnlService as never,
@@ -126,6 +131,7 @@ describe('DashboardService retry/timeout/fallback policy', () => {
       service,
       mocks: {
         usersService,
+        binanceService,
         marketDataService,
         ordersService,
         pnlService,
