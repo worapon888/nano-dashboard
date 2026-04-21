@@ -451,6 +451,7 @@ function DashboardPage() {
       return
     }
 
+
     setData((current) => {
       if (!current?.btcPriceTrend) {
         return current

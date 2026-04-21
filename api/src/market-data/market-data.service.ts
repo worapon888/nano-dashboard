@@ -491,12 +491,14 @@ export class MarketDataService {
       HOT_CACHE_TTL_SECONDS,
     );
     await this.redisService.set(
-      staleCacheKey,
-      cachePayload,
-      STALE_CACHE_TTL_SECONDS,
-    );
+  staleCacheKey,
+  cachePayload,
+  STALE_CACHE_TTL_SECONDS,
+);
 
-    this.logger.log(`Ticker stale cache written with key ${staleCacheKey}`);
+  this.logger.log(
+  `Ticker caches written: hot=${hotCacheKey}, stale=${staleCacheKey}`,
+);
   }
 
   private async backfillStaleCacheIfMissing(
