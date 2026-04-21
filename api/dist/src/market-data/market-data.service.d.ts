@@ -2,59 +2,7 @@ import { BinanceService } from '../binance/binance.service';
 import type { MarketEventsPublisher } from '../events/events.tokens';
 import { RedisService } from '../redis/redis.service';
 import { TickerDto } from './dto/ticker.dto';
-type DashboardTickerDto = {
-    symbol: string;
-    price: string;
-    volume24h: string | null;
-    priceChange24h: string | null;
-    high24h: string | null;
-    low24h: string | null;
-    fetchedAt: string;
-};
-type BtcPriceTrendRange = 'day' | 'week' | 'month';
-export type BtcPriceTrendDto = {
-    range: BtcPriceTrendRange;
-    currency: 'USD';
-    livePrice: number;
-    change24h: number;
-    change24hPercent: number;
-    labels: string[];
-    series: number[];
-    high: number;
-    low: number;
-    updatedAt: string;
-};
-export type DashboardBtcPriceTrendSnapshot = {
-    range: '15m' | '1h' | '4h' | '1d';
-    currency: 'USD';
-    livePrice: number;
-    change24h: number;
-    change24hPercent: number;
-    labels: string[];
-    series: number[];
-    high: number;
-    low: number;
-    updatedAt: string;
-};
-export type DashboardVolumeProfileSnapshot = {
-    timeframe: '15m' | '1h' | '4h' | '1d';
-    labels: string[];
-    volume: number[];
-    colors: string[];
-    updatedAt: string;
-};
-export type DashboardMarketOverviewSnapshot = {
-    btcDominance: number;
-    fearGreedIndex: number;
-};
-export type DashboardMarketShareSnapshot = {
-    symbol: string;
-    dominance: number;
-};
-export type DashboardMarketCompositionSnapshot = {
-    marketOverview: DashboardMarketOverviewSnapshot;
-    marketShare: DashboardMarketShareSnapshot[];
-};
+import { BtcPriceTrendDto, BtcPriceTrendRange, DashboardBtcPriceTrendSnapshot, DashboardMarketCompositionSnapshot, DashboardTickerDto, DashboardVolumeProfileSnapshot } from './market-data.helpers';
 export declare class MarketDataService {
     private readonly binanceService;
     private readonly redisService;
@@ -66,10 +14,6 @@ export declare class MarketDataService {
     getDashboardBtcPriceTrend(range: DashboardBtcPriceTrendSnapshot['range']): Promise<DashboardBtcPriceTrendSnapshot>;
     getDashboardVolumeProfile(timeframe: DashboardVolumeProfileSnapshot['timeframe']): Promise<DashboardVolumeProfileSnapshot>;
     buildDashboardMarketComposition(tickers: DashboardTickerDto[]): DashboardMarketCompositionSnapshot;
-    private toDashboardTickerDto;
-    private toBtcPriceTrendDto;
-    private formatTrendLabel;
-    private toFiniteNumber;
     getTicker(symbol: string): Promise<TickerDto>;
     private fetchAndCacheTicker;
     private waitForFetcherOrFallback;
@@ -85,17 +29,4 @@ export declare class MarketDataService {
     private stripRuntimeCacheFlags;
     private isStaleTicker;
     private isUnavailableTicker;
-    private normalizeSymbol;
-    private toBtcLivePriceUpdate;
-    private getHotCacheKey;
-    private getStaleCacheKey;
-    private getLockKey;
-    private getChannelKey;
-    private toPercentage;
-    private clampIndex;
-    private toDashboardBtcPriceTrendDto;
-    private toDashboardVolumeProfileDto;
-    private formatDashboardTrendLabel;
-    private formatDashboardVolumeLabel;
 }
-export {};

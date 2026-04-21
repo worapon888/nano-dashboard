@@ -18,6 +18,7 @@ const common_1 = require("@nestjs/common");
 const binance_service_1 = require("../binance/binance.service");
 const events_tokens_1 = require("../events/events.tokens");
 const redis_service_1 = require("../redis/redis.service");
+const market_data_helpers_1 = require("./market-data.helpers");
 const HOT_CACHE_TTL_SECONDS = 10;
 const STALE_CACHE_TTL_SECONDS = 120;
 const LOCK_TTL_SECONDS = 5;
@@ -31,8 +32,6 @@ const DEFAULT_MOVER_SYMBOLS = [
 ];
 const BTC_TREND_SYMBOL = 'BTCUSDT';
 const BTC_PRICE_UPDATED_EVENT = 'btc.price.updated';
-const VOLUME_BULLISH_COLOR = '#22c55e';
-const VOLUME_BEARISH_COLOR = '#ef4444';
 const BTC_TREND_CONFIG = {
     day: { interval: '1h', limit: 24 },
     week: { interval: '4h', limit: 42 },
@@ -64,15 +63,15 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 5;
         const symbols = DEFAULT_MOVER_SYMBOLS.slice(0, safeLimit);
         const results = await Promise.allSettled(symbols.map(async (symbol) => {
-            const hot = await this.redisService.get(this.getHotCacheKey(symbol));
+            const hot = await this.redisService.get((0, market_data_helpers_1.getHotCacheKey)(symbol));
             if (hot)
-                return this.toDashboardTickerDto(hot);
-            const stale = await this.redisService.get(this.getStaleCacheKey(symbol));
+                return (0, market_data_helpers_1.toDashboardTickerDto)(hot);
+            const stale = await this.redisService.get((0, market_data_helpers_1.getStaleCacheKey)(symbol));
             if (stale)
-                return this.toDashboardTickerDto(stale);
+                return (0, market_data_helpers_1.toDashboardTickerDto)(stale);
             try {
                 const freshTicker = await this.getTicker(symbol);
-                return this.toDashboardTickerDto(freshTicker);
+                return (0, market_data_helpers_1.toDashboardTickerDto)(freshTicker);
             }
             catch (error) {
                 this.logger.warn(`Tracked ticker unavailable for ${symbol}: ${error instanceof Error ? error.message : 'unknown error'}`);
@@ -93,7 +92,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
                 this.getTicker(BTC_TREND_SYMBOL),
                 this.binanceService.getKlines(BTC_TREND_SYMBOL, config.interval, config.limit),
             ]);
-            return this.toBtcPriceTrendDto(range, ticker, klines);
+            return (0, market_data_helpers_1.toBtcPriceTrendDto)(range, ticker, klines);
         }
         catch (error) {
             if (this.isBinanceUnavailableError(error)) {
@@ -113,7 +112,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
                 this.binanceService.getTicker(BTC_TREND_SYMBOL),
                 this.binanceService.getKlines(BTC_TREND_SYMBOL, config.interval, config.limit),
             ]);
-            return this.toDashboardBtcPriceTrendDto(range, ticker, klines);
+            return (0, market_data_helpers_1.toDashboardBtcPriceTrendDto)(range, ticker, klines);
         }
         catch (error) {
             if (this.isBinanceUnavailableError(error)) {
@@ -130,7 +129,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
         try {
             const klines = await this.binanceService.getKlines(BTC_TREND_SYMBOL, config.interval, config.limit);
-            return this.toDashboardVolumeProfileDto(timeframe, klines);
+            return (0, market_data_helpers_1.toDashboardVolumeProfileDto)(timeframe, klines);
         }
         catch (error) {
             if (this.isBinanceUnavailableError(error)) {
@@ -141,116 +140,10 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
     }
     buildDashboardMarketComposition(tickers) {
-        const normalizedTickers = tickers
-            .map((ticker) => {
-            const price = this.toFiniteNumber(ticker.price);
-            const volume24h = this.toFiniteNumber(ticker.volume24h);
-            return {
-                symbol: ticker.symbol,
-                price,
-                volume24h,
-                turnover: price > 0 && volume24h > 0 ? price * volume24h : 0,
-                priceChangeRatio: price > 0
-                    ? this.toFiniteNumber(ticker.priceChange24h) / price
-                    : 0,
-            };
-        })
-            .filter((ticker) => ticker.symbol.length > 0);
-        const totalTurnover = normalizedTickers.reduce((sum, ticker) => sum + ticker.turnover, 0);
-        const btcTicker = normalizedTickers.find((ticker) => ticker.symbol === 'BTCUSDT');
-        if (!btcTicker || totalTurnover <= 0) {
-            throw new common_1.ServiceUnavailableException('Market overview is temporarily unavailable');
-        }
-        const ethTurnover = normalizedTickers.find((ticker) => ticker.symbol === 'ETHUSDT')?.turnover ?? 0;
-        const btcDominance = this.toPercentage((btcTicker.turnover / totalTurnover) * 100);
-        const ethDominance = this.toPercentage((ethTurnover / totalTurnover) * 100);
-        const othersDominance = this.toPercentage(Math.max(0, 100 - btcDominance - ethDominance));
-        const positiveBreadthRatio = normalizedTickers.length > 0
-            ? normalizedTickers.filter((ticker) => ticker.priceChangeRatio > 0).length /
-                normalizedTickers.length
-            : 0.5;
-        const btcMomentumPercent = btcTicker.priceChangeRatio * 100;
-        const fearGreedIndex = this.clampIndex(Math.round(50 + btcMomentumPercent * 6 + (positiveBreadthRatio - 0.5) * 40));
-        return {
-            marketOverview: {
-                btcDominance,
-                fearGreedIndex,
-            },
-            marketShare: [
-                { symbol: 'BTC', dominance: btcDominance },
-                { symbol: 'ETH', dominance: ethDominance },
-                { symbol: 'OTHERS', dominance: othersDominance },
-            ],
-        };
-    }
-    toDashboardTickerDto(ticker) {
-        return {
-            symbol: ticker.symbol,
-            price: ticker.price,
-            volume24h: ticker.volume24h ?? null,
-            priceChange24h: ticker.priceChange24h ?? null,
-            high24h: ticker.high24h ?? null,
-            low24h: ticker.low24h ?? null,
-            fetchedAt: ticker.fetchedAt,
-        };
-    }
-    toBtcPriceTrendDto(range, ticker, klines) {
-        const points = klines
-            .map((kline) => {
-            const timestamp = Number(kline[0]);
-            const closePrice = Number(kline[4]);
-            if (!Number.isFinite(timestamp) || !Number.isFinite(closePrice)) {
-                return null;
-            }
-            return {
-                label: this.formatTrendLabel(timestamp, range),
-                closePrice,
-            };
-        })
-            .filter((point) => point !== null);
-        const series = points.map((point) => point.closePrice);
-        const labels = points.map((point) => point.label);
-        const high = series.length > 0 ? Math.max(...series) : 0;
-        const low = series.length > 0 ? Math.min(...series) : 0;
-        return {
-            range,
-            currency: 'USD',
-            livePrice: this.toFiniteNumber(ticker.price),
-            change24h: this.toFiniteNumber(ticker.priceChange24h),
-            change24hPercent: this.toFiniteNumber(ticker.priceChange24hPercent),
-            labels,
-            series,
-            high,
-            low,
-            updatedAt: ticker.fetchedAt,
-        };
-    }
-    formatTrendLabel(timestamp, range) {
-        const date = new Date(timestamp);
-        if (range === 'day') {
-            return new Intl.DateTimeFormat('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-                timeZone: 'UTC',
-            }).format(date);
-        }
-        return new Intl.DateTimeFormat('en-US', {
-            month: 'short',
-            day: 'numeric',
-            timeZone: 'UTC',
-        }).format(date);
-    }
-    toFiniteNumber(value) {
-        const parsed = typeof value === 'number'
-            ? value
-            : typeof value === 'string'
-                ? Number(value)
-                : NaN;
-        return Number.isFinite(parsed) ? parsed : 0;
+        return (0, market_data_helpers_1.buildDashboardMarketComposition)(tickers);
     }
     async getTicker(symbol) {
-        const normalizedSymbol = this.normalizeSymbol(symbol);
+        const normalizedSymbol = (0, market_data_helpers_1.normalizeSymbol)(symbol);
         const redisClient = this.redisService.getClient();
         const redisReady = this.redisService.isReady();
         if (!redisClient || !redisReady) {
@@ -260,7 +153,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
                 ? directTicker
                 : this.withCacheSource(directTicker, 'fresh');
         }
-        const hotCacheKey = this.getHotCacheKey(normalizedSymbol);
+        const hotCacheKey = (0, market_data_helpers_1.getHotCacheKey)(normalizedSymbol);
         const cachedTicker = await this.redisService.get(hotCacheKey);
         if (cachedTicker) {
             this.logger.log(`Ticker hot cache hit for ${normalizedSymbol}`);
@@ -268,7 +161,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
             return this.withCacheSource(cachedTicker, 'hot');
         }
         this.logger.log(`Ticker hot cache miss for ${normalizedSymbol}`);
-        const lockKey = this.getLockKey(normalizedSymbol);
+        const lockKey = (0, market_data_helpers_1.getLockKey)(normalizedSymbol);
         const lockValue = `${process.pid}:${Date.now()}`;
         const lockAcquired = await this.redisService.setNx(lockKey, lockValue, LOCK_TTL_SECONDS);
         if (lockAcquired) {
@@ -279,7 +172,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         return this.waitForFetcherOrFallback(normalizedSymbol, hotCacheKey);
     }
     async fetchAndCacheTicker(symbol, hotCacheKey, lockKey) {
-        const channel = this.getChannelKey(symbol);
+        const channel = (0, market_data_helpers_1.getChannelKey)(symbol);
         const ticker = await this.getTickerFromBinanceOrFallback(symbol);
         if (this.isStaleTicker(ticker)) {
             await this.redisService.del(lockKey);
@@ -296,7 +189,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         return this.withCacheSource(ticker, 'fresh');
     }
     async waitForFetcherOrFallback(symbol, hotCacheKey) {
-        const channel = this.getChannelKey(symbol);
+        const channel = (0, market_data_helpers_1.getChannelKey)(symbol);
         const hotTicker = await this.redisService.get(hotCacheKey);
         if (hotTicker) {
             this.logger.log(`Ticker hot cache won race for ${symbol}`);
@@ -321,7 +214,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         return this.getStaleTickerOrThrow(symbol);
     }
     async getStaleTickerOrThrow(symbol) {
-        const staleCacheKey = this.getStaleCacheKey(symbol);
+        const staleCacheKey = (0, market_data_helpers_1.getStaleCacheKey)(symbol);
         this.logger.warn(`Trying stale cache with key ${staleCacheKey}`);
         const staleTicker = await this.redisService.get(staleCacheKey);
         if (staleTicker) {
@@ -370,7 +263,7 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
         try {
             await this.marketEventsPublisher.publishTicker(`ticker:${symbol}`, ticker);
-            const btcLiveUpdate = this.toBtcLivePriceUpdate(symbol, ticker);
+            const btcLiveUpdate = (0, market_data_helpers_1.toBtcLivePriceUpdate)(symbol, BTC_TREND_SYMBOL, ticker);
             if (btcLiveUpdate) {
                 await this.marketEventsPublisher.publishTicker(BTC_PRICE_UPDATED_EVENT, btcLiveUpdate);
             }
@@ -388,14 +281,14 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         }
     }
     async writeTickerCaches(symbol, hotCacheKey, ticker) {
-        const staleCacheKey = this.getStaleCacheKey(symbol);
+        const staleCacheKey = (0, market_data_helpers_1.getStaleCacheKey)(symbol);
         const cachePayload = this.stripRuntimeCacheFlags(ticker);
         await this.redisService.set(hotCacheKey, cachePayload, HOT_CACHE_TTL_SECONDS);
         await this.redisService.set(staleCacheKey, cachePayload, STALE_CACHE_TTL_SECONDS);
-        this.logger.log(`Ticker stale cache written with key ${staleCacheKey}`);
+        this.logger.log(`Ticker caches written: hot=${hotCacheKey}, stale=${staleCacheKey}`);
     }
     async backfillStaleCacheIfMissing(symbol, ticker) {
-        const staleCacheKey = this.getStaleCacheKey(symbol);
+        const staleCacheKey = (0, market_data_helpers_1.getStaleCacheKey)(symbol);
         const staleTicker = await this.redisService.get(staleCacheKey);
         if (staleTicker) {
             return;
@@ -425,146 +318,9 @@ let MarketDataService = MarketDataService_1 = class MarketDataService {
         if (ticker.stale === true || ticker.source === 'fallback') {
             return true;
         }
-        const price = this.toFiniteNumber(ticker.price);
-        const volume24h = this.toFiniteNumber(ticker.volume24h);
+        const price = (0, market_data_helpers_1.toFiniteNumber)(ticker.price);
+        const volume24h = (0, market_data_helpers_1.toFiniteNumber)(ticker.volume24h);
         return price <= 0 || volume24h <= 0;
-    }
-    normalizeSymbol(symbol) {
-        return symbol.trim().toUpperCase();
-    }
-    toBtcLivePriceUpdate(symbol, ticker) {
-        if (symbol !== BTC_TREND_SYMBOL) {
-            return null;
-        }
-        return {
-            symbol: BTC_TREND_SYMBOL,
-            price: this.toFiniteNumber(ticker.price),
-            change24h: this.toFiniteNumber(ticker.priceChange24h),
-            change24hPercent: this.toFiniteNumber(ticker.priceChange24hPercent),
-            high24h: this.toFiniteNumber(ticker.high24h),
-            low24h: this.toFiniteNumber(ticker.low24h),
-            updatedAt: typeof ticker.fetchedAt === 'string' && ticker.fetchedAt.length > 0
-                ? ticker.fetchedAt
-                : new Date().toISOString(),
-        };
-    }
-    getHotCacheKey(symbol) {
-        return `app:ticker:${symbol}:hot`;
-    }
-    getStaleCacheKey(symbol) {
-        return `app:ticker:${symbol}:stale`;
-    }
-    getLockKey(symbol) {
-        return `app:lock:ticker:${symbol}`;
-    }
-    getChannelKey(symbol) {
-        return `app:ch:ticker:${symbol}`;
-    }
-    toPercentage(value) {
-        return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
-    }
-    clampIndex(value) {
-        if (!Number.isFinite(value)) {
-            return 50;
-        }
-        return Math.max(0, Math.min(100, value));
-    }
-    toDashboardBtcPriceTrendDto(range, ticker, klines) {
-        const points = klines
-            .map((kline) => {
-            const openTime = Number(kline[0]);
-            const closePrice = Number(kline[4]);
-            if (!Number.isFinite(openTime) || !Number.isFinite(closePrice)) {
-                return null;
-            }
-            return {
-                label: this.formatDashboardTrendLabel(openTime, range),
-                closePrice,
-            };
-        })
-            .filter((point) => point !== null);
-        const labels = points.map((point) => point.label);
-        const series = points.map((point) => point.closePrice);
-        if (labels.length === 0 || series.length === 0) {
-            throw new common_1.ServiceUnavailableException(`BTC price trend returned no usable points for ${range}`);
-        }
-        return {
-            range,
-            currency: 'USD',
-            livePrice: this.toFiniteNumber(ticker.price),
-            change24h: this.toFiniteNumber(ticker.priceChange24h),
-            change24hPercent: this.toFiniteNumber(ticker.priceChange24hPercent),
-            labels,
-            series,
-            high: Math.max(...series),
-            low: Math.min(...series),
-            updatedAt: typeof ticker.fetchedAt === 'string'
-                ? ticker.fetchedAt
-                : new Date().toISOString(),
-        };
-    }
-    toDashboardVolumeProfileDto(timeframe, klines) {
-        const points = klines
-            .map((kline) => {
-            const openTime = Number(kline[0]);
-            const open = Number(kline[1]);
-            const close = Number(kline[4]);
-            const volume = Number(kline[5]);
-            if (!Number.isFinite(openTime) ||
-                !Number.isFinite(open) ||
-                !Number.isFinite(close) ||
-                !Number.isFinite(volume)) {
-                return null;
-            }
-            return {
-                label: this.formatDashboardVolumeLabel(openTime, timeframe),
-                volume,
-                color: close >= open ? VOLUME_BULLISH_COLOR : VOLUME_BEARISH_COLOR,
-                updatedAt: new Date(Number(kline[6])).toISOString(),
-            };
-        })
-            .filter((point) => point !== null);
-        return {
-            timeframe,
-            labels: points.map((point) => point.label),
-            volume: points.map((point) => point.volume),
-            colors: points.map((point) => point.color),
-            updatedAt: points.length > 0
-                ? points[points.length - 1].updatedAt
-                : new Date().toISOString(),
-        };
-    }
-    formatDashboardTrendLabel(timestamp, range) {
-        const date = new Date(timestamp);
-        if (range === '15m' || range === '1h') {
-            return new Intl.DateTimeFormat('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-                timeZone: 'UTC',
-            }).format(date);
-        }
-        return new Intl.DateTimeFormat('en-US', {
-            month: 'short',
-            day: 'numeric',
-            timeZone: 'UTC',
-        }).format(date);
-    }
-    formatDashboardVolumeLabel(timestamp, timeframe) {
-        const date = new Date(timestamp);
-        if (timeframe === '15m' || timeframe === '1h') {
-            return new Intl.DateTimeFormat('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-                timeZone: 'UTC',
-            }).format(date);
-        }
-        return new Intl.DateTimeFormat('en-US', {
-            month: 'short',
-            day: 'numeric',
-            timeZone: 'UTC',
-        }).format(date);
     }
 };
 exports.MarketDataService = MarketDataService;
