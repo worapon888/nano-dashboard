@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
@@ -119,5 +119,16 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
     expect(prismaService.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('register() throws BadRequestException when both name fields are missing', async () => {
+    await expect(
+      service.register({
+        email: 'new.user@example.com',
+        password: 'password123',
+      } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prismaService.user.findFirst).not.toHaveBeenCalled();
   });
 });

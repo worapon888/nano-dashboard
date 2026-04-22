@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -132,6 +133,11 @@ export class AuthService {
 
   private normalizeDisplayName(registerDto: RegisterDto) {
     const value = registerDto.name ?? registerDto.displayName;
+
+    if (typeof value !== 'string') {
+      throw new BadRequestException('Display name is required');
+    }
+
     return value.trim();
   }
 

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsDefined,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -22,7 +23,7 @@ export class RegisterDto {
 
   @ApiPropertyOptional({ example: 'Demo User' })
   @ValidateIf((object: RegisterDto) => object.name === undefined)
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
@@ -30,7 +31,7 @@ export class RegisterDto {
 
   @ApiPropertyOptional({ example: 'Demo User' })
   @ValidateIf((object: RegisterDto) => object.displayName === undefined)
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
